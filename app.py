@@ -906,7 +906,7 @@ hr{border-color:var(--av-line)}
 .st-key-overview_card_types{container-type:inline-size}
 .overview-donut-layout{grid-template-columns:minmax(125px,.95fr) minmax(0,1.15fr);gap:14px;min-height:180px;padding:10px 0}
 .overview-donut-visual{width:100%;max-width:210px;justify-self:center;min-width:0}
-.overview-donut-visual svg{display:block;width:100%;height:auto;overflow:visible;font-family:inherit}
+.overview-donut-visual img{display:block;width:100%;height:auto;object-fit:contain;font-family:inherit}
 .overview-legend-row{grid-template-columns:9px minmax(0,1fr) max-content;gap:7px;align-items:start}
 .overview-legend-row span{overflow-wrap:normal;word-break:normal;line-height:1.4}
 .overview-legend-row b{white-space:nowrap;font-variant-numeric:tabular-nums}
@@ -1482,6 +1482,52 @@ def overview_mover_changes(prices):
     return changes[changes.matched_premises.ge(3) & changes.change_pct.ne(0)]
 
 
+@st.cache_data(ttl=3600,max_entries=24,show_spinner=False)
+def cached_overview_summary(database,stamp,snap,scoped_reports,scoped_dates,codes,state,_store=None):
+    store=_store
+    state_clause=' AND state=?' if state is not None else ''
+    state_params=[state] if state is not None else []
+    totals=store.q(f'''SELECT COUNT(DISTINCT premise_code) premises, COUNT(DISTINCT state) states,
+        COUNT(DISTINCT NULLIF(TRIM(district),'')) FILTER (
+            WHERE premise_code IS NOT NULL AND LOWER(TRIM(district)) NOT IN ('unknown','unknown district')
+        ) AS districts,
+        COUNT(DISTINCT premise_type) FILTER (
+            WHERE premise_code IS NOT NULL AND premise_type NOT IN ('Unknown','Unknown type')
+        ) AS premise_type_count {scoped_reports}''',scoped_dates).iloc[0]
+    item_counts=store.q(f'''SELECT item_code, COUNT(DISTINCT premise_code) reporters
+        {scoped_reports} GROUP BY item_code''',scoped_dates)
+    types=store.q(f'''WITH type_counts AS (
+        SELECT premise_code, premise_type, COUNT(*) AS observations
+        {scoped_reports} AND premise_code IS NOT NULL AND premise_type IS NOT NULL
+        GROUP BY premise_code,premise_type
+    ), selected_type AS (
+        SELECT premise_code,premise_type AS premise_type_name
+        FROM type_counts
+        QUALIFY ROW_NUMBER() OVER (
+            PARTITION BY premise_code ORDER BY observations DESC,premise_type ASC
+        )=1
+    ) SELECT premise_type_name,COUNT(*) AS premises
+      FROM selected_type GROUP BY premise_type_name
+      ORDER BY premises DESC,premise_type_name''',scoped_dates)
+    codes=list(codes)
+    recent_end = pd.Timestamp(store.q(f"""SELECT MAX(CAST(date AS DATE)) AS latest
+        FROM clean_joined_prices WHERE state IS NOT NULL AND premise_code IS NOT NULL
+        AND price > 0 AND isfinite(price){state_clause}""",state_params).iloc[0].latest)
+    if pd.isna(recent_end):
+        recent_end = snap
+    recent_start = recent_end-pd.Timedelta(days=6)
+    weekly_prices = overview_period_prices(store,recent_end,7,codes,state_clause,state_params)
+    movers = overview_mover_changes(weekly_prices)
+    mover_days = 7
+    if len(movers)<6:
+        fortnight_prices = overview_period_prices(store,recent_end,14,codes,state_clause,state_params)
+        fortnight_movers = overview_mover_changes(fortnight_prices)
+        if len(fortnight_movers)>len(movers):
+            movers, mover_days = fortnight_movers, 14
+
+    return totals,item_counts,types,recent_end,movers,mover_days
+
+
 def overview(store,cat,root,batch):
     snap=store.snapshot()
     if snap is None:
@@ -1519,44 +1565,11 @@ def overview(store,cat,root,batch):
     scoped_dates=[*dates,*state_params]
     if state is not None:
         st.html(f'<div class="overview-selected-area">Selected state · <strong>{esc(state)}</strong></div>')
+    codes=cat.item_code.astype(int).tolist()
     with st.spinner('Summarising PriceCatcher reports…'):
-        totals=store.q(f'''SELECT COUNT(DISTINCT premise_code) premises, COUNT(DISTINCT state) states,
-            COUNT(DISTINCT NULLIF(TRIM(district),'')) FILTER (
-                WHERE premise_code IS NOT NULL AND LOWER(TRIM(district)) NOT IN ('unknown','unknown district')
-            ) AS districts,
-            COUNT(DISTINCT premise_type) FILTER (
-                WHERE premise_code IS NOT NULL AND premise_type NOT IN ('Unknown','Unknown type')
-            ) AS premise_type_count {scoped_reports}''',scoped_dates).iloc[0]
-        item_counts=store.q(f'''SELECT item_code, COUNT(DISTINCT premise_code) reporters
-            {scoped_reports} GROUP BY item_code''',scoped_dates)
-        types=store.q(f'''WITH type_counts AS (
-            SELECT premise_code, premise_type, COUNT(*) AS observations
-            {scoped_reports} AND premise_code IS NOT NULL AND premise_type IS NOT NULL
-            GROUP BY premise_code,premise_type
-        ), selected_type AS (
-            SELECT premise_code,premise_type AS premise_type_name
-            FROM type_counts
-            QUALIFY ROW_NUMBER() OVER (
-                PARTITION BY premise_code ORDER BY observations DESC,premise_type ASC
-            )=1
-        ) SELECT premise_type_name,COUNT(*) AS premises
-          FROM selected_type GROUP BY premise_type_name
-          ORDER BY premises DESC,premise_type_name''',scoped_dates)
-        codes=cat.item_code.astype(int).tolist()
-        recent_end = pd.Timestamp(store.q(f"""SELECT MAX(CAST(date AS DATE)) AS latest
-            FROM clean_joined_prices WHERE state IS NOT NULL AND premise_code IS NOT NULL
-            AND price > 0 AND isfinite(price){state_clause}""",state_params).iloc[0].latest)
-        if pd.isna(recent_end):
-            recent_end = snap
-        recent_start = recent_end-pd.Timedelta(days=6)
-        weekly_prices = overview_period_prices(store,recent_end,7,codes,state_clause,state_params)
-        movers = overview_mover_changes(weekly_prices)
-        mover_days = 7
-        if len(movers)<6:
-            fortnight_prices = overview_period_prices(store,recent_end,14,codes,state_clause,state_params)
-            fortnight_movers = overview_mover_changes(fortnight_prices)
-            if len(fortnight_movers)>len(movers):
-                movers, mover_days = fortnight_movers, 14
+        totals,item_counts,types,recent_end,movers,mover_days=cached_overview_summary(
+            store.db,store.stamp,snap,scoped_reports,tuple(scoped_dates),tuple(codes),state,_store=store)
+    recent_start=recent_end-pd.Timedelta(days=6)
 
     routes=(eligible.assign(priority=eligible.level.ne('state'))
             .sort_values(['priority','state']).drop_duplicates('item_code'))
@@ -1723,11 +1736,11 @@ def overview(store,cat,root,batch):
 
 
 @st.cache_data(ttl=3600,max_entries=24,show_spinner=False)
-def cached_price_pulse(database,stamp,first_month,last_month,codes,state,_store=None,_progress=None):
+def cached_price_pulse(database,stamp,first_month,last_month,codes,state,_store=None):
     from pulse_history import monthly_pulse
     return monthly_pulse(_store,pd.Period(first_month,freq='M'),pd.Period(last_month,freq='M'),
                          list(codes),' AND state=?' if state is not None else '',
-                         [state] if state is not None else [],_progress)
+                         [state] if state is not None else [],None)
 
 
 def overview_historical_pulse(store, snap, area, state_clause, state_params, outlook_codes):
@@ -1748,14 +1761,9 @@ def overview_historical_pulse(store, snap, area, state_clause, state_params, out
     if last_month <= first_month:
         st.info('At least two complete months of reported prices are needed.')
         return
-    from pulse_history import monthly_pulse
-    progress=st.progress(0.,text='Summarising monthly price history…')
-    try:
+    with st.spinner('Loading historical price pulse…'):
         changes=cached_price_pulse(store.db,store.stamp,str(first_month),str(last_month),
-            tuple(sorted(outlook_codes)),state_params[0] if state_params else None,
-            _store=store,_progress=lambda done,total:progress.progress(done/total,text=f'Summarising monthly price history: {done}/{total} months'))
-    finally:
-        progress.empty()
+            tuple(sorted(outlook_codes)),state_params[0] if state_params else None,_store=store)
     if changes.empty:
         st.info('No items have prices from at least 3 matched premises in consecutive complete months.')
         return
@@ -1849,11 +1857,13 @@ def overview_premise_donut(types):
         angle=end
         legend.append(f'<div class="overview-legend-row"><i style="background:{color}"></i>'
                       f'<span>{esc(label)}</span><b title="{count:,} premises">{count/total:.1%}</b></div>')
+    svg=(f'<svg xmlns="http://www.w3.org/2000/svg" width="200" height="135" viewBox="0 0 200 135">'
+         f'{"".join(arcs)}<text x="100" y="84" text-anchor="middle" fill="#60796e" font-family="Arial,sans-serif" font-size="12">Total</text>'
+         f'<text x="100" y="108" text-anchor="middle" fill="#113f34" font-family="Arial,sans-serif" font-size="23" font-weight="700">{total:,}</text></svg>')
+    src='data:image/svg+xml;base64,'+base64.b64encode(svg.encode()).decode()
     st.html(f'<div class="overview-donut-layout"><div class="overview-donut-visual">'
-            f'<svg viewBox="0 0 200 135" role="img" aria-label="Total {total:,} reporting premises">'
-            f'{"".join(arcs)}<text x="100" y="84" text-anchor="middle" fill="#60796e" font-size="12">Total</text>'
-            f'<text x="100" y="108" text-anchor="middle" fill="#113f34" font-size="23" font-weight="700">{total:,}</text>'
-            f'</svg></div><div class="overview-legend">{"".join(legend)}</div></div>')
+            f'<img src="{src}" width="200" height="135" alt="Total {total:,} reporting premises"></div>'
+            f'<div class="overview-legend">{"".join(legend)}</div></div>')
 
 
 def overview_coverage(label,counts,color):
