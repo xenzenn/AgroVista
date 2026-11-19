@@ -1108,6 +1108,44 @@ a[href^="https://streamlit.io/cloud"]{display:none!important}
 .st-key-catalog_menus_grid :is(button p,[data-testid="stLinkButton"] a p){font-size:.75rem!important;white-space:nowrap!important}
 .st-key-catalog_menus_grid [data-testid="stLinkButton"] a :is(svg,span.material-symbols-rounded){font-size:12px!important;width:12px!important}
 }
+
+/* Catalog gallery: desktop landscape frames, mobile square frames. */
+.st-key-catalog_ingredients_grid [data-testid="stVerticalBlockBorderWrapper"]{height:100%!important;box-sizing:border-box!important;border-color:var(--av-line-2)!important}
+.catalog-category-label{color:#111;font-size:14px;font-weight:400;line-height:1.5;margin:0 0 8px}
+.st-key-catalog_category_nav>[data-testid="stVerticalBlock"]{gap:8px!important}
+.st-key-catalog_category_nav [data-testid="stElementContainer"]:has(.catalog-category-label){margin-bottom:4px!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) :is([data-testid="stImage"], [data-testid="stImageContainer"]){width:100%!important;max-width:100%!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) :is([data-testid="stImage"] img,.catalog-photo,.menu-card-photo,.catalog-photo-placeholder){box-sizing:border-box;width:100%!important;max-width:100%!important;height:auto!important;aspect-ratio:16 / 10!important;object-fit:contain!important;background:#fff;border:1px solid var(--av-line-2)!important;border-radius:10px!important;margin:0!important;padding:4px!important}
+.st-key-catalog_menus_grid [data-testid="stImage"] img{object-fit:cover!important;padding:0!important}
+.st-key-catalog_ingredients_grid .catalog-name{font-size:.88rem!important;line-height:1.45!important;min-height:4.35em!important;height:4.35em!important;overflow:hidden!important;display:-webkit-box!important;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.st-key-catalog_ingredients_grid [data-testid="stVerticalBlock"]{gap:8px!important}
+.st-key-catalog_ingredients_grid .menu-card-meta{margin:4px 0 8px!important;line-height:1.5!important}
+@media(min-width:1001px){
+/* A shared frame width makes food, recipes and recipe ingredients match. */
+.st-key-catalog_items_grid [data-testid="stHorizontalBlock"]{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+.st-key-catalog_ingredients_grid [data-testid="stHorizontalBlock"]{grid-template-columns:repeat(5,minmax(0,1fr))!important;gap:14px!important;align-items:stretch!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:column!important;gap:12px!important}
+}
+@media(max-width:1000px){
+[data-testid="stDialog"] [role="dialog"]{width:calc(100vw - 16px)!important;max-width:calc(100vw - 16px)!important;padding:12px!important;box-sizing:border-box!important}
+[data-testid="stDialog"] [role="dialog"] [data-testid="stDialogContent"]{padding:0!important}
+/* Remove the dialog body's additional desktop gutter, retaining a 12px inset. */
+[data-testid="stDialog"] [role="dialog"]>div{padding-left:0!important;padding-right:0!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important;align-items:stretch!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]){padding:10px!important;height:100%!important;border-radius:12px!important}
+/* The image and text columns inside each card stack; only the gallery has two columns. */
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:column!important;gap:10px!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stColumn"]{width:100%!important;flex:0 0 auto!important;min-width:0!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) :is([data-testid="stImage"] img,.catalog-photo,.menu-card-photo,.catalog-photo-placeholder){aspect-ratio:1 / 1!important;height:auto!important;width:100%!important;max-width:100%!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_ingredients_grid) .catalog-name,.st-key-catalog_menus_grid .menu-card-title{font-size:.8rem!important;line-height:1.45!important;height:4.35em!important;min-height:4.35em!important;display:-webkit-box!important;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden!important;margin:0!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) [data-testid="stVerticalBlock"]{gap:8px!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid) [data-testid="stCaptionContainer"]{margin:0 0 4px!important}
+.st-key-catalog_menus_grid .menu-card-meta{height:1.5em!important;min-height:1.5em!important;margin:0 0 4px!important}
+.st-key-catalog_ingredients_grid .menu-card-meta{min-height:3em!important;font-size:.78rem!important;margin:0 0 4px!important}
+[class*="st-key-menu_actions_"] [data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:column!important;gap:8px!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid) :is(button,[data-testid="stLinkButton"] a){min-height:44px!important;padding:8px!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid) :is(button p,[data-testid="stLinkButton"] a p){font-size:.78rem!important;white-space:normal!important;line-height:1.35!important}
+}
 </style>'''    
 
 def esc(v):return html.escape(str(v),quote=True)
@@ -2479,7 +2517,7 @@ def item_catalog(root,available,in_basket=None,selected_code=None):
     with st.container(key='catalog_item_layout'):
         sidebar,content=st.columns([1,5],gap='medium')
         with sidebar,st.container(key='catalog_category_nav'):
-            st.caption('Category')
+            st.html('<div class="catalog-category-label">Category</div>')
             for option in categories:
                 st.button(option,key=f'catalog_category_{option}',width='stretch',
                           type='primary' if category==option else 'secondary',
