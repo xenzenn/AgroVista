@@ -966,6 +966,38 @@ hr{border-color:var(--av-line)}
 :is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) [data-testid="stHorizontalBlock"]{grid-template-columns:1fr!important}
 .mobile-dates{font-size:.69rem}.st-key-mobile_nav button p{font-size:.68rem!important}
 }
+
+.st-key-mobile_catalog_category{display:none}
+@media(max-width:1000px){
+.mobile-brand{justify-content:center;text-align:center}.mobile-brand img{object-position:center;width:156px}
+.mobile-dates{text-align:center;margin:4px auto 12px;max-width:100%;text-wrap:balance}
+.st-key-mobile_header{margin-bottom:8px!important}
+.stApp:has(.st-key-landing_page) .st-key-mobile_header{display:none!important}
+.st-key-landing_nav [data-testid="stColumn"]:first-child{display:block!important;flex:1 1 100%!important;text-align:center}.st-key-landing_nav img{margin-inline:auto!important}
+.st-key-landing_nav [data-testid="stColumn"]:last-child{flex:1 1 100%!important}
+.st-key-landing_nav [data-testid="stColumn"]:last-child button{max-width:240px;margin:auto}
+.st-key-overview_toolbar [data-testid="stHorizontalBlock"]{row-gap:14px!important}
+.st-key-overview_toolbar .overview-title{margin-bottom:12px!important}
+.st-key-mobile_nav{left:10px!important;right:10px!important;bottom:calc(10px + env(safe-area-inset-bottom))!important;
+ border:1px solid #d4e4db;border-radius:20px;background:#fff!important;padding:6px!important;box-shadow:0 4px 22px #0e392b26}
+.st-key-mobile_nav button{border:0!important;background:transparent!important;color:#50695e!important;border-radius:14px!important;min-height:56px!important}
+.st-key-mobile_nav button p{color:inherit!important;font-size:.73rem!important}
+.st-key-mobile_nav button[kind="primary"]{background:#e1f1e8!important;color:#075b42!important}
+.st-key-mobile_nav button>div{flex-direction:column!important;gap:3px!important}
+.st-key-mobile_nav button [data-testid="stIconMaterial"]{font-size:21px!important}
+[data-testid="stStatusWidget"],[data-testid="stAppDeployButton"],.stAppDeployButton,[data-testid="stAppCreatorAvatar"],#viewerBadge{display:none!important}
+.st-key-mobile_nav:has(~ [data-testid="stDialog"]){visibility:hidden}
+body:has([role="dialog"]) .st-key-mobile_nav{visibility:hidden!important}
+.st-key-mobile_catalog_category{display:block!important;margin-bottom:12px}
+.st-key-catalog_category_nav{display:none!important}
+.st-key-catalog_item_layout [data-testid="stColumn"]:has(.st-key-catalog_category_nav){display:none!important}
+[data-testid="stDialog"] [role="dialog"]{position:relative!important;margin:12px auto!important;max-height:calc(100dvh - 32px)!important;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;padding:16px!important}
+[data-testid="stDialog"] [role="dialog"]>div{max-height:none!important;overflow:visible}
+[data-testid="stDialog"] [data-testid="stVerticalBlockBorderWrapper"]{max-height:none}
+.st-key-catalog_items_grid{height:auto!important;max-height:none!important;overflow:visible!important}
+.menu-card-title{min-height:3.2em!important;font-size:.94rem!important}
+.menu-card-meta{min-height:1.5em!important}
+}
 </style>'''
 
 def esc(v):return html.escape(str(v),quote=True)
@@ -2287,6 +2319,11 @@ def full_recipe_button(source, name, key):
 @st.dialog('Item catalog',width='large')
 def item_catalog(root,available,in_basket=None,selected_code=None):
     items=available.assign(category=available.item_category.replace('', 'Other'))
+    categories=['All',*sorted(items.category.unique(),key=str.casefold)]
+    if st.session_state.get('catalog_category_choice') not in categories:
+        st.session_state['catalog_category_choice']='All'
+    with st.container(key='mobile_catalog_category'):
+        st.selectbox('Category',categories,key='catalog_category_choice')
     with st.container(key='catalog_item_layout'):
         sidebar,content=st.columns([1,5])
         categories=['All',*sorted(items.category.unique(),key=str.casefold)]
@@ -2308,7 +2345,7 @@ def item_catalog(root,available,in_basket=None,selected_code=None):
             if items.empty:
                 st.caption('No items match in this area.')
                 return
-            with st.container(height=440,border=False,key='catalog_items_grid'):
+            with st.container(border=False,key='catalog_items_grid'):
                 for _,group in items.groupby('category',sort=True):
                     st.markdown(f'**{esc(group.category.iloc[0])}**')
                     cards=st.columns(5,gap='small')
@@ -3078,7 +3115,7 @@ def main():
         for col,(option,label) in zip(st.columns(4,gap='small'),[
                 ('Home','Home'),('Market Overview','Overview'),
                 ('Price Analysis & Forecast','Prices'),('Basket Comparison','Basket')]):
-            col.button(label,key=f'mobile_nav_{option}',width='stretch',
+            col.button(label,key=f'mobile_nav_{option}',icon=icons[option],width='stretch',
                        type='primary' if option==page else 'secondary',
                        on_click=st.session_state.__setitem__,args=('page',option))
     content=st.empty()
