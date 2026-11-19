@@ -1146,6 +1146,41 @@ a[href^="https://streamlit.io/cloud"]{display:none!important}
 :is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid) :is(button,[data-testid="stLinkButton"] a){min-height:44px!important;padding:8px!important}
 :is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid) :is(button p,[data-testid="stLinkButton"] a p){font-size:.78rem!important;white-space:normal!important;line-height:1.35!important}
 }
+
+/* Catalog containment and basket mobile alignment. */
+@media(max-width:1000px){
+[data-testid="stDialog"] [role="dialog"]{width:calc(100% - 24px)!important;max-width:calc(100vw - 24px)!important;min-width:0!important;margin:12px auto!important;padding:12px!important;box-sizing:border-box!important;overflow-x:hidden!important}
+[data-testid="stDialog"] [role="dialog"] :is([data-testid="stVerticalBlock"],[data-testid="stElementContainer"],[data-testid="stColumn"],[data-testid="stHorizontalBlock"]){min-width:0!important;max-width:100%!important;box-sizing:border-box!important}
+[data-testid="stDialog"] [role="dialog"] [data-testid="stColumn"]{width:100%!important}
+[data-testid="stDialog"] [role="dialog"] :is(h2,[data-testid="stHeading"]){margin-left:0!important;padding-left:0!important}
+[data-testid="stDialog"] [role="dialog"] [data-testid="stDialogContent"]{width:100%!important;min-width:0!important;padding:0!important}
+[data-testid="stDialog"] [role="dialog"] [data-baseweb="modal-header"]{padding-left:0!important;margin-left:0!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid){width:100%!important;max-width:100%!important;min-width:0!important;box-sizing:border-box!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) [data-testid="stHorizontalBlock"]{width:100%!important;min-width:0!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:column!important;width:100%!important}
+[class*="st-key-menu_actions_"] [data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:column!important}
+.st-key-basket_modern [class*="st-key-basket_row_"]{position:relative;padding:12px 0 12px 64px!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;gap:10px!important;align-items:center!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stColumn"]{min-width:0!important;width:100%!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stColumn"]:first-child{grid-column:1 / -1!important}
+.st-key-basket_modern .basket-item-cell{position:static!important;display:block!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] .basket-thumb{position:absolute;left:0;top:12px;width:52px!important;height:52px!important;object-fit:contain}
+.st-key-basket_modern [class*="st-key-basket_row_"] .basket-item-name{font-size:.84rem;line-height:1.45}
+.st-key-basket_modern [class*="st-key-basket_row_"] .basket-item-meta{margin-top:4px;line-height:1.45}
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stNumberInputContainer"]{position:relative;min-width:0!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stNumberInputContainer"]::after{content:'KG';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:.7rem;font-weight:650;color:var(--av-muted);pointer-events:none}
+.st-key-basket_modern [class*="st-key-basket_row_"] input[type="number"]{padding-left:30px!important;padding-right:4px!important;text-align:left!important;font-size:.8rem!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] button{min-height:44px!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stButton"] button{padding:8px!important}
+}
+
+@media(max-width:1000px){
+/* Size the modal surface itself, rather than letting its inner dialog overflow. */
+[data-testid="stDialog"]>div:has(>[role="dialog"]){width:calc(100vw - 24px)!important;min-width:0!important;max-width:calc(100vw - 24px)!important;margin:12px!important;box-sizing:border-box!important}
+[data-testid="stDialog"] [role="dialog"]{width:100%!important;max-width:100%!important;margin:0!important;padding:14px!important;box-sizing:border-box!important}
+[data-testid="stDialog"] [role="dialog"] [slot="title"]{padding:4px 32px 18px 0!important;margin:0!important;min-width:0!important}
+[data-testid="stDialog"] [role="dialog"]>button[aria-label="Close"]{top:14px!important;right:14px!important;min-width:32px;min-height:32px}
+}
 </style>'''    
 
 def esc(v):return html.escape(str(v),quote=True)
@@ -2530,18 +2565,8 @@ def item_catalog(root,available,in_basket=None,selected_code=None):
             if items.empty:
                 st.caption('No items match in this area.')
                 return
-            total=len(items)
-            page_count=max(1,(total+11)//12)
-            filter_signature=(category,search,tuple(items.item_code.astype(int)))
-            if st.session_state.get('_catalog_filter_signature')!=filter_signature:
-                st.session_state['_catalog_filter_signature']=filter_signature
-                st.session_state['catalog_page']=0
-            if st.session_state.get('catalog_page',0)>=page_count:
-                st.session_state['catalog_page']=0
-            page=st.selectbox('Results page',range(page_count),key='catalog_page',
-                              format_func=lambda n:f'{n+1} / {page_count}')
-            st.caption(f'{total} matching items · showing {page*12+1}–{min(total,(page+1)*12)}')
-            items=items.sort_values(['category','item']).iloc[page*12:(page+1)*12]
+            st.caption(f'{len(items)} matching items')
+            items=items.sort_values(['category','item'])
             with st.container(border=False,key='catalog_items_grid'):
                 for _,group in items.groupby('category',sort=True):
                     st.markdown(f'**{esc(group.category.iloc[0])}**')
@@ -3076,7 +3101,7 @@ def price_comparison(store,cat,prem,root,today):
         if not basket:
             st.html('<div class="basket-empty">Your basket is empty. Add items to compare their total across premises.</div>')
             return
-        st.html('<div class="basket-table-head"><span>Item</span><span>Quantity</span><span>Action</span></div>')
+        st.html('<div class="basket-table-head"><span>Item</span><span>Quantity (KG)</span><span>Action</span></div>')
         item_map=selectable.set_index('item_code')
         for entry in basket:
             item_code=int(entry['item_code'])
