@@ -1010,9 +1010,11 @@ def seed_basket_menus(db):
 
 
 def project_root(db):
+    db=Path(db)
     return db.parent.parent.parent if db.parent.name=='database' and db.parent.parent.name=='data' else db.parent
 
 def signature(db):
+    db=Path(db)
     s=db.stat();wal=Path(str(db)+'.wal');return (s.st_mtime_ns,s.st_size,wal.stat().st_mtime_ns if wal.exists() else 0)
 
 @st.cache_data(ttl=300,max_entries=8,show_spinner=False)
@@ -1022,6 +1024,7 @@ def sql(db,stamp,query,params=()):
 
 class Store:
     def __init__(self,db):
+        db=Path(db)
         self.db=str(db);self.stamp=signature(db)
         self.tables=set(self.q('SHOW TABLES')['name'])
         self.cols={t:set(self.q(f'DESCRIBE {ident(t)}')['column_name']) for t in ['lookup_items','lookup_premises','clean_joined_prices',FORECAST,'daily_state_prices'] if t in self.tables}
@@ -1517,7 +1520,6 @@ def cached_overview_summary(database,stamp,snap,scoped_reports,scoped_dates,code
         AND price > 0 AND isfinite(price){state_clause}""",state_params).iloc[0].latest)
     if pd.isna(recent_end):
         recent_end = snap
-    recent_start = recent_end-pd.Timedelta(days=6)
     weekly_prices = overview_period_prices(store,recent_end,7,codes,state_clause,state_params)
     movers = overview_mover_changes(weekly_prices)
     mover_days = 7
@@ -1559,7 +1561,6 @@ def overview(store,cat,root,batch):
     st.session_state['_overview_market_area']=area
     state=None if area=='Malaysia' else area
     eligible=all_eligible if state is None else all_eligible[all_eligible.state.eq(state)]
-    catalog_count=cat.item_code.nunique()
     cat=cat[cat.item_code.isin(eligible.item_code)]
     state_clause=' AND state=?' if state is not None else ''
     state_params=[state] if state is not None else []
@@ -1800,7 +1801,7 @@ def overview_first_day(store, batch, area, state, codes):
                 else f'{datefmt(first_day)} forecast vs latest recorded prices')
     overview_panel('First-day price outlook', subtitle)
     first = forecasts[forecasts.forecast_date.eq(first_day) & forecasts.forecast_today.eq(first_day)]
-    history = store.q(f'''WITH latest AS (
+    history = store.q('''WITH latest AS (
         SELECT state,item_code,MAX(CAST(date AS DATE)) AS observed_date
         FROM clean_joined_prices
         WHERE date < CAST(? AS DATE) AND state IN (SELECT UNNEST(?::VARCHAR[]))
@@ -2990,7 +2991,7 @@ def landing_page():
 
 @st.cache_data(ttl=3600,max_entries=2,show_spinner=False)
 def cached_navigation_data(database,stamp):
-    store=Store(database)
+    store=Store(Path(database))
     batch=store.batch()
     snapshot=store.snapshot()
     catalogue=store.catalogue(project_root(Path(database)))
