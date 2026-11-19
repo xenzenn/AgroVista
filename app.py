@@ -1050,7 +1050,25 @@ a[href^="https://streamlit.io/cloud"]{display:none!important}
 .catalog-photo{height:76px!important;object-fit:contain!important}
 .st-key-catalog_ingredients_grid label p{font-size:.75rem!important}
 }
-</style>'''  
+/* Compact horizontal catalog cards; media URLs let the browser reuse thumbnails. */
+.st-key-catalog_items_grid [data-testid="stHorizontalBlock"],.st-key-catalog_menus_grid [data-testid="stHorizontalBlock"]{grid-template-columns:repeat(2,minmax(0,1fr))!important;align-items:stretch!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:80px minmax(0,1fr)!important;gap:12px!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stColumn"]{width:100%!important;min-width:0!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stImage"] img{height:80px!important;width:100%!important;object-fit:contain;border:1px solid var(--av-line-2);border-radius:10px;background:white}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) .catalog-photo{width:80px!important;height:80px!important}
+.st-key-catalog_items_grid .catalog-name,.st-key-catalog_menus_grid .menu-card-title{height:auto!important;min-height:0!important;font-size:.88rem!important;line-height:1.4!important;overflow:visible!important;display:block!important;overflow-wrap:normal!important}
+.st-key-catalog_menus_grid .menu-card-meta{height:auto!important;min-height:0!important}
+[class*="st-key-menu_card_"],[class*="st-key-item_card_"]{height:auto!important}
+.st-key-catalog_menus_grid [data-testid="stHorizontalBlock"]{grid-auto-rows:auto!important}
+@media(max-width:780px){
+.st-key-catalog_items_grid [data-testid="stHorizontalBlock"],.st-key-catalog_menus_grid [data-testid="stHorizontalBlock"]{grid-template-columns:1fr!important;gap:10px!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stHorizontalBlock"]{grid-template-columns:76px minmax(0,1fr)!important;gap:12px!important}
+.st-key-catalog_ingredients_grid [data-testid="stHorizontalBlock"]{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid) button{min-height:44px!important}
+}
+[class*="st-key-menu_actions_"] [data-testid="stHorizontalBlock"]{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+@media(max-width:780px){[class*="st-key-menu_actions_"] [data-testid="stHorizontalBlock"]{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+</style>'''    
 
 def esc(v):return html.escape(str(v),quote=True)
 def money(v):return f'RM {float(v):,.2f}' if v is not None and pd.notna(v) and np.isfinite(float(v)) else '—'
@@ -1454,7 +1472,7 @@ def open_price_comparison(code,state,premise=None):
     # Deliberately leave navigation, location filters and forecast date untouched.
 
 
-@st.cache_data(ttl=3600,max_entries=64,show_spinner=False)
+@st.cache_data(ttl=3600,max_entries=256,show_spinner=False)
 def asset_image(root,group,code):
     for base in (root,root/'app',Path(__file__).parent):
         for ext in ['.webp','.png','.jpg','.jpeg']:
@@ -2367,9 +2385,36 @@ def market_watch(store, root, state, code, item, unit, today):
                     chart(fig, 'market_watch_cpi', 211, toolbar=False, margin=dict(l=8,r=10,t=4,b=23))
 
 
+@st.cache_data(ttl=3600,max_entries=256,show_spinner=False)
+def catalog_thumbnail(root,group,code):
+    from PIL import Image,ImageOps
+    from io import BytesIO
+    for base in (Path(root),Path(root)/'app',Path(__file__).parent):
+        for ext in ('.webp','.png','.jpg','.jpeg'):
+            path=base/'assets'/group/f'{code}{ext}'
+            if not path.is_file():
+                continue
+            try:
+                with Image.open(path) as original:
+                    image=ImageOps.exif_transpose(original).convert('RGBA')
+                    image.thumbnail((360,240),Image.Resampling.LANCZOS)
+                    background=Image.new('RGB',image.size,'white')
+                    background.paste(image,mask=image.getchannel('A'))
+                    output=BytesIO()
+                    background.save(output,format='WEBP',quality=85,method=4)
+                    return output.getvalue()
+            except (OSError,ValueError):
+                continue
+    return None
+
+
 def catalog_image(root,item):
-    src,_=food_image(root,item)
-    st.markdown(f'<img class="catalog-photo" src="{src}" alt="">',unsafe_allow_html=True)
+    thumbnail=catalog_thumbnail(str(root),'foods',int(item.item_code))
+    if thumbnail:
+        st.image(thumbnail,width='stretch')
+    else:
+        src,_=food_image(root,item)
+        st.markdown(f'<img class="catalog-photo" src="{src}" alt="">',unsafe_allow_html=True)
 
 
 def full_recipe_button(source, name, key, compact=False):
@@ -2400,25 +2445,39 @@ def item_catalog(root,available,in_basket=None,selected_code=None):
             if items.empty:
                 st.caption('No items match in this area.')
                 return
-            st.caption(f'{len(items)} matching items')
+            total=len(items)
+            page_count=max(1,(total+11)//12)
+            filter_signature=(category,search,tuple(items.item_code.astype(int)))
+            if st.session_state.get('_catalog_filter_signature')!=filter_signature:
+                st.session_state['_catalog_filter_signature']=filter_signature
+                st.session_state['catalog_page']=0
+            if st.session_state.get('catalog_page',0)>=page_count:
+                st.session_state['catalog_page']=0
+            page=st.selectbox('Results page',range(page_count),key='catalog_page',
+                              format_func=lambda n:f'{n+1} / {page_count}')
+            st.caption(f'{total} matching items · showing {page*12+1}–{min(total,(page+1)*12)}')
+            items=items.sort_values(['category','item']).iloc[page*12:(page+1)*12]
             with st.container(border=False,key='catalog_items_grid'):
                 for _,group in items.groupby('category',sort=True):
                     st.markdown(f'**{esc(group.category.iloc[0])}**')
                     cards=st.columns(len(group),gap='small')
                     for index,(_,item) in enumerate(group.sort_values('item').iterrows()):
-                        with cards[index],st.container(border=True):
-                            catalog_image(root,item)
-                            st.markdown(f'<div class="catalog-name" title="{esc(item["item"])}">{esc(item["item"])}</div>',unsafe_allow_html=True)
-                            st.caption(item.unit)
-                            added=item.item_code in in_basket if in_basket is not None else item.item_code==selected_code
-                            action=('In basket' if added else 'Add') if in_basket is not None else ('Selected' if added else 'Select')
-                            if st.button(action,key=f'catalog_item_{item.item_code}',disabled=added):
-                                if in_basket is None:
-                                    st.session_state.pending_prediction_item=int(item.item_code)
-                                else:
-                                    add_comparison_item(item.item_code)
-                                close_catalog()
-                                st.rerun()
+                        with cards[index],st.container(border=True,key=f'item_card_{int(item.item_code)}'):
+                            photo,info=st.columns([1,2.7],gap='small')
+                            with photo:
+                                catalog_image(root,item)
+                            with info:
+                                st.markdown(f'<div class="catalog-name" title="{esc(item["item"])}">{esc(item["item"])}</div>',unsafe_allow_html=True)
+                                st.caption(item.unit)
+                                added=item.item_code in in_basket if in_basket is not None else item.item_code==selected_code
+                                action=('In basket' if added else 'Add') if in_basket is not None else ('Selected' if added else 'Select')
+                                if st.button(action,key=f'catalog_item_{item.item_code}',disabled=added,width='stretch'):
+                                    if in_basket is None:
+                                        st.session_state.pending_prediction_item=int(item.item_code)
+                                    else:
+                                        add_comparison_item(item.item_code)
+                                    close_catalog()
+                                    st.rerun()
 
 def item_analysis(store,cat,prem,root,batch,today):
     def filter_select(container,label,options,key,default=None,format_func=str):
@@ -2812,9 +2871,10 @@ def price_comparison(store,cat,prem,root,today):
         catalogue=cat.set_index('item_code')
         menu=st.session_state.get('catalog_menu_detail')
         if menu not in menus.menu_name.values:
-            names=menus.menu_name.drop_duplicates().tolist()
+            query=st.text_input('Search menus',key='catalog_menu_search',placeholder='Enter a menu name').strip()
+            names=[name for name in menus.menu_name.drop_duplicates().tolist() if query.casefold() in name.casefold()]
             if not names:
-                st.info('No menus are available in the catalogue.')
+                st.info('No menus match your search.' if query else 'No menus are available in the catalogue.')
                 return
             with st.container(key='catalog_menus_grid'):
                 cards=st.columns(len(names),gap='small')
@@ -2822,18 +2882,27 @@ def price_comparison(store,cat,prem,root,today):
                     details=recipe_metadata.get(name,RECIPE_MENUS.get(name,{}))
                     servings=details.get('servings')
                     with card,st.container(border=True,key=f'menu_card_{index}'):
-                        image_code=details.get('menu_id') or menu_image_code(name)
-                        src=asset_image(root,'menus',image_code)
-                        photo=f'<img src="{src}" alt="" loading="lazy">' if src else '<span>No photo yet</span>'
-                        st.html(f'<div class="menu-card-photo">{photo}</div>')
-                        serving_text=f'{esc(servings)} servings' if pd.notna(servings) and servings else ''
-                        st.html(f'<div class="menu-card-title" title="{esc(name)}">{esc(name)}</div>'
-                                f'<div class="menu-card-meta">{serving_text}</div>')
-                        st.button('Ingredients',key=f'catalog_menu_{index}',width='stretch',
-                                  help=f'Select basket ingredients for {name}.',
-                                  on_click=st.session_state.__setitem__,args=('catalog_menu_detail',name))
-                        full_recipe_button(details.get('recipe_source',details.get('source')),name,
-                                           f'catalog_recipe_{index}',compact=True)
+                        photo_col,info_col=st.columns([1,2.7],gap='small')
+                        with photo_col:
+                            image_code=details.get('menu_id') or menu_image_code(name)
+                            thumbnail=catalog_thumbnail(str(root),'menus',image_code)
+                            if thumbnail:
+                                st.image(thumbnail,width='stretch')
+                            else:
+                                st.html('<div class="menu-card-photo"><span>No photo yet</span></div>')
+                        with info_col:
+                            serving_text=f'{esc(servings)} servings' if pd.notna(servings) and servings else ''
+                            st.html(f'<div class="menu-card-title" title="{esc(name)}">{esc(name)}</div>'
+                                    f'<div class="menu-card-meta">{serving_text}</div>')
+                            with st.container(key=f'menu_actions_{index}'):
+                                ingredients_col,recipe_col=st.columns(2,gap='small')
+                                with ingredients_col:
+                                    st.button('Ingredients',key=f'catalog_menu_{index}',width='stretch',
+                                              help=f'Select basket ingredients for {name}.',
+                                              on_click=st.session_state.__setitem__,args=('catalog_menu_detail',name))
+                                with recipe_col:
+                                    full_recipe_button(details.get('recipe_source',details.get('source')),name,
+                                                       f'catalog_recipe_{index}',compact=True)
             return
         details=recipe_metadata.get(menu,RECIPE_MENUS.get(menu,{}))
         with st.container(key='menu_detail'):
