@@ -27,6 +27,8 @@ jobs:
           cache-dependency-path: requirements-refresh.txt
       - name: Install inference dependencies
         run: python -m pip install -r requirements-refresh.txt
+      - name: Validate inputs before downloading database
+        run: python run_cloud_refresh.py --preflight-only
       - name: Restore completed weather requests
         uses: actions/cache/restore@v4
         with:

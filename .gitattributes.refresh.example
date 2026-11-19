@@ -1,0 +1,4 @@
+# Optional: append to existing .gitattributes; not required for canonical checksums.
+weather_seed.csv text eol=lf
+weather_seed.sha256 text eol=lf
+*.joblib binary

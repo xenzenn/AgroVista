@@ -51,7 +51,7 @@ def main():
         jp=MODEL_ROOT/folder/'manifest.json'
         if not mp.is_file() or not jp.is_file():
             raise FileNotFoundError(f'Missing 06{ "A" if level=="state" else "B" } artifacts: {mp} / {jp}')
-        art=joblib.load(mp); manifest=json.loads(jp.read_text(encoding='utf-8'))
+        art=joblib.load(mp); manifest=json.loads(jp.read_text(encoding='utf-8-sig'))
         for k in ('pipeline','columns','vocab','window_size','target_mode','algorithm','supported_horizons'):
             if k not in art: raise ValueError(f'{level}: missing artifact field {k}')
         if art['level']!=level: raise ValueError(f'{level}: artifact level mismatch')

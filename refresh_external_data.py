@@ -16,6 +16,61 @@ WEATHER_FIELDS = ['rain_total_mm', 'temperature_mean_c', 'humidity_mean_pct',
                   'wet_streak_days', 'dry_streak_days']
 
 
+# The seed is text: Windows/Git may change CRLF to LF without changing any values.
+PINNED_SEED_CANONICAL_SHA256='588d59f79075b8f9e6fa812000e18938df7b913ffc0c984e881c55e17bdbceec'
+LEGACY_SEED_RAW_SHA256='732f7404d8d70b9c5822de1d16900138c8fb8a976b5a5b2d87a560e3198187f2'
+SEED_STATES={'Johor','Kedah','Kelantan','Melaka','Negeri Sembilan','Pahang','Perak','Perlis',
+             'Pulau Pinang','Sabah','Sarawak','Selangor','Terengganu','W.P. Kuala Lumpur',
+             'W.P. Labuan','W.P. Putrajaya'}
+
+def canonical_seed_bytes(raw):
+    try:text=raw.decode('utf-8-sig')
+    except UnicodeError as exc:raise ValueError('Weather seed must be UTF-8 CSV, not Excel/UTF-16.') from exc
+    return (text.replace('\r\n','\n').replace('\r','\n').rstrip('\n')+'\n').encode('utf-8')
+
+def load_weather_seed(root=None,required=False):
+    import hashlib,re
+    import numpy as np
+    from io import BytesIO
+    root=Path(root) if root is not None else ROOT
+    path=root/'weather_seed.csv'
+    if not path.is_file():
+        if required:raise FileNotFoundError('weather_seed.csv missing at repository root. Commit the seed file before running the workflow.')
+        return None
+    if path.stat().st_size>20*1024**2:raise ValueError('Weather seed exceeds the expected 20 MiB limit.')
+    raw=path.read_bytes();canonical=canonical_seed_bytes(raw)
+    actual=hashlib.sha256(canonical).hexdigest()
+    checksum=root/'weather_seed.sha256'
+    if checksum.is_file():
+        tokens=checksum.read_text(encoding='utf-8-sig').split()
+        if not tokens or not re.fullmatch('[0-9a-fA-F]{64}',tokens[0]):
+            raise ValueError('weather_seed.sha256 has invalid content. Copy the provided checksum file.')
+        expected=tokens[0].lower()
+        if expected==LEGACY_SEED_RAW_SHA256:expected=PINNED_SEED_CANONICAL_SHA256
+    else:
+        expected=PINNED_SEED_CANONICAL_SHA256
+        print('Seed companion checksum missing; checking the embedded pinned checksum instead.',flush=True)
+    if actual!=expected and hashlib.sha256(raw).hexdigest()!=expected:
+        raise ValueError(f'Weather seed data changed (not just line endings). Expected {expected}; got {actual}. Copy the provided seed and checksum files.')
+    frame=pd.read_csv(BytesIO(canonical))
+    columns=['date','state','temperature_2m_mean','precipitation_sum','relative_humidity_2m_mean']
+    if set(frame)!=set(columns):raise ValueError('Weather seed columns do not match the expected schema.')
+    frame['date']=pd.to_datetime(frame.date,errors='raise').dt.normalize()
+    if frame.empty or frame.isna().any().any() or frame.duplicated(['state','date']).any():
+        raise ValueError('Weather seed contains missing values, duplicate dates, or no rows.')
+    if set(frame.state)!=SEED_STATES:raise ValueError('Weather seed must contain all 16 states/territories.')
+    for field in columns[2:]:
+        frame[field]=pd.to_numeric(frame[field],errors='raise')
+        if not np.isfinite(frame[field]).all():raise ValueError('Weather seed contains nonfinite measurements.')
+    if frame.precipitation_sum.lt(0).any() or not frame.relative_humidity_2m_mean.between(0,100).all():
+        raise ValueError('Weather seed contains invalid rain/humidity measurements.')
+    for state,group in frame.groupby('state'):
+        if len(pd.date_range(group.date.min(),group.date.max()).difference(group.date)):
+            raise ValueError(f'Weather seed contains missing dates for {state}.')
+    print(f'Verified weather seed: {len(frame)} rows, 16 states, through {frame.date.max().date()} (platform-independent checksum).',flush=True)
+    return frame[columns]
+
+
 _PREFER_WEATHER_CURL=False
 
 def _curl_weather_get(url,params):
@@ -30,17 +85,19 @@ def _curl_weather_get(url,params):
         raise requests.ConnectionError('curl is unavailable on this runner')
     target=url+'?'+urlencode(params or {})
     command=['curl','--ipv4','--http1.1','--proto','=https','--silent','--show-error',
-             '--fail','--connect-timeout','20','--max-time','90',target]
+             '--fail','--connect-timeout','20','--max-time','90','--write-out','\n%{http_code}',target]
     try:
         result=subprocess.run(command,capture_output=True,timeout=100)
     except (OSError,subprocess.TimeoutExpired) as exc:
         raise requests.ConnectionError('Weather curl transport failed') from exc
-    if result.returncode:
-        if result.returncode==22:
-            raise RuntimeError('Weather curl received an HTTP error; no alternate source will be substituted.')
-        raise requests.ConnectionError(f'Weather curl transport exit code {result.returncode}')
-    response=requests.Response();response.status_code=200;response._content=result.stdout
+    body,_,status=result.stdout.rpartition(b'\n')
+    if not status.isdigit():
+        raise requests.ConnectionError(f'Weather curl transport exit code {result.returncode}; no HTTP status')
+    response=requests.Response();response.status_code=int(status);response._content=body
     response.url=target;response.encoding='utf-8'
+    if response.status_code>=400:response.raise_for_status()
+    if result.returncode or response.status_code!=200:
+        raise requests.ConnectionError(f'Weather curl transport exit code {result.returncode}')
     return response
 
 
@@ -68,7 +125,10 @@ def get_with_retry(url, *, params=None, attempts=4):
                     response=_curl_weather_get(url,params)
                     _PREFER_WEATHER_CURL=True
                     return response
-                except requests.exceptions.RequestException:
+                except requests.exceptions.RequestException as fallback_error:
+                    fallback_status=getattr(getattr(fallback_error,'response',None),'status_code',None)
+                    if fallback_status is not None and fallback_status not in (408,425,429,500,502,503,504):raise
+                    exc=fallback_error
                     print('Weather curl connection also unavailable; keeping bounded retries/checkpoint.',flush=True)
             if attempt==attempts:
                 raise RuntimeError(f'External source unavailable after {attempts} attempts ({type(exc).__name__}). Weather progress was kept; retry with a NEW workflow run.') from exc
@@ -277,29 +337,26 @@ def refresh_external_data():
     cached_path=destination/'weather_state_daily.csv'
     checkpoint_path=destination/'.weather_checkpoint.csv'
     seed_path=ROOT/'weather_seed.csv'
-    if seed_path.is_file():
-        import hashlib
-        checksum_path=ROOT/'weather_seed.sha256'
-        if not checksum_path.is_file() or hashlib.sha256(seed_path.read_bytes()).hexdigest()!=checksum_path.read_text().strip():
-            raise ValueError('Weather seed checksum missing or mismatched; existing data retained.')
+    validated_seed=load_weather_seed()
     required={'state','date',*weather_columns}
     cache_parts=[]
     for cache_file in (seed_path,checkpoint_path,cached_path):
         if not cache_file.is_file():continue
-        part=pd.read_csv(cache_file)
-        if part.empty:continue
-        if not required<=set(part.columns):
-            raise ValueError(f'Weather cache is missing {required-set(part.columns)}')
-        part['date']=pd.to_datetime(part.date,errors='raise').dt.normalize()
-        if part.duplicated(['state','date']).any():
-            raise ValueError('Duplicate state/date keys in weather cache.')
-        for field in weather_columns:
-            part[field]=pd.to_numeric(part[field],errors='raise')
-            if np.isinf(part[field]).any():raise ValueError('Infinite weather cache values')
-        if cache_file==seed_path:
-            if part[['state','date',*weather_columns]].isna().any().any():raise ValueError('Weather seed has missing values')
-            if part.precipitation_sum.lt(0).any() or not part.relative_humidity_2m_mean.between(0,100).all():raise ValueError('Weather seed has invalid measurements')
-            print(f'Using verified local weather seed: {len(part)} rows, {part.state.nunique()} states, through {part.date.max().date()}',flush=True)
+        try:
+            part=validated_seed.copy() if cache_file==seed_path else pd.read_csv(cache_file,encoding='utf-8-sig')
+            if part is None or part.empty:continue
+            if not required<=set(part.columns):
+                raise ValueError(f'Weather cache is missing {required-set(part.columns)}')
+            part['date']=pd.to_datetime(part.date,errors='raise').dt.normalize()
+            if part[['state','date']].isna().any().any() or part.duplicated(['state','date']).any():
+                raise ValueError('Missing or duplicate state/date keys in weather cache.')
+            for field in weather_columns:
+                part[field]=pd.to_numeric(part[field],errors='raise')
+                if np.isinf(part[field]).any():raise ValueError('Infinite weather cache values')
+        except (ValueError,KeyError,TypeError,UnicodeError):
+            if cache_file!=checkpoint_path:raise
+            print('Ignoring invalid optional weather checkpoint; using verified seed/published cache.',flush=True)
+            continue
         cache_parts.append(part[['date','state',*weather_columns]])
     cached=(pd.concat(cache_parts,ignore_index=True).drop_duplicates(['state','date'],keep='last')
             if cache_parts else pd.DataFrame(columns=['date','state',*weather_columns]))

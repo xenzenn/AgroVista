@@ -23,13 +23,47 @@ def validate_models():
         warnings.simplefilter('error',InconsistentVersionWarning)
         for level,algorithm in [('state','LightGBM'),('premise','RandomForest')]:
             folder=ROOT/'models/agrovista_per_horizon_candidates'/f'{level}_level'
+            for name in ('selected_direct_model.joblib','manifest.json'):
+                if not (folder/name).is_file():raise FileNotFoundError(f'Missing {level} model file: {folder/name}. Commit both model folders.')
             model=joblib.load(folder/'selected_direct_model.joblib')
-            manifest=json.loads((folder/'manifest.json').read_text())
+            manifest=json.loads((folder/'manifest.json').read_text(encoding='utf-8-sig'))
             validate_contract(model)
             for key in ('level','columns','algorithm','architecture','window_size','configuration','supported_horizons'):
                 if model[key]!=manifest[key]:raise ValueError(f'{level} model/manifest mismatch: {key}')
             if model['level']!=level or model['algorithm']!=algorithm:raise ValueError('Wrong model placed in folder')
+            expected_config={'state':'PriceCatcher + Weather','premise':'PriceCatcher + Holidays'}[level]
+            if model['window_size']!=30 or model['configuration']!=expected_config or not set(range(1,22))<=set(model['supported_horizons']):
+                raise ValueError(f'{level} model configuration/horizons do not match the refresh contract')
             print(f'Validated {level}: {algorithm}, sklearn {sklearn.__version__}',flush=True)
+
+def preflight():
+    import pandas as pd
+    from refresh_external_data import load_weather_seed
+    print('AgroVista checked refresh v3; commit:',os.environ.get('GITHUB_SHA','local')[:12],flush=True)
+    for name in ('refresh_pricecatcher.py','refresh_external_data.py','refresh_forecasts.py',
+                 'agrovista_horizon_models.py','update_bundle.py','cloud_updates.py','cloud_database.py'):
+        path=ROOT/name
+        if not path.is_file():raise FileNotFoundError(f'Missing deployment file: {name}')
+        compile(path.read_text(encoding='utf-8-sig'),str(path),'exec')
+    scope=ROOT/'data/analysis/scope/state_scope.csv'
+    if not scope.is_file():raise FileNotFoundError('Missing data/analysis/scope/state_scope.csv; commit the supplied scope.')
+    frame=pd.read_csv(scope)
+    if frame.empty or not {'state','item_code'}<=set(frame):raise ValueError('Empty or invalid state scope.')
+    import numpy as np
+    from refresh_external_data import SEED_STATES
+    codes=pd.to_numeric(frame.item_code,errors='coerce')
+    if codes.isna().any() or not np.isfinite(codes).all() or codes.le(0).any() or not codes.eq(np.floor(codes)).all():
+        raise ValueError('Scope contains missing/noninteger/invalid item codes.')
+    if frame.state.isna().any() or not set(frame.state)<=SEED_STATES:
+        raise ValueError('Scope contains missing or unknown state names.')
+    if 'state_eligible' in frame:
+        labels=frame.state_eligible.astype(str).str.lower()
+        if not labels.isin(['true','false','1','0','yes','no']).all() or not labels.isin(['true','1','yes']).any():
+            raise ValueError('Scope contains invalid eligibility values or no eligible pairs.')
+    load_weather_seed(ROOT,required=True)
+    validate_models()
+    print('PREFLIGHT PASSED: scripts, scope, weather seed, models and manifests.',flush=True)
+
 
 def run_step(script,*args):
     print('\nStarting '+script,flush=True)
@@ -54,7 +88,7 @@ def publish(archive,manifest_file,token):
             raise RuntimeError(f'Release upload failed (HTTP {response.status_code}); no complete update advertised.')
 
 def main():
-    validate_models()
+    preflight()
     token=os.environ.get('GITHUB_TOKEN','')
     if not token:raise RuntimeError('Missing Actions GITHUB_TOKEN. Run through the supplied workflow.')
     database=ROOT/'data/database/agrovista.duckdb'
@@ -84,4 +118,10 @@ def main():
         with open(summary,'a',encoding='utf-8') as out:
             out.write(f"## Data refresh succeeded\n\nLatest prices: {manifest['source_last']}\n\nForecast: {manifest['forecast_today']}\n\nUpdate transfer: {manifest['archive_bytes']/1024**2:.1f} MiB.\n")
 
-if __name__=='__main__':main()
+if __name__=='__main__':
+    import argparse
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--preflight-only',action='store_true')
+    args=parser.parse_args()
+    if args.preflight_only:preflight()
+    else:main()

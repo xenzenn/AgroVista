@@ -1,18 +1,24 @@
-# Validation results
+# Checked refresh validation
 
-Passed locally with Python 3.12 and Streamlit 1.65.0:
+Environment: Python 3.12, Streamlit 1.65.0, scikit-learn 1.9.1; actual uploaded model artifacts.
 
-- Two actual uploaded model contracts/manifests; 21-horizon predictions each; sklearn 1.9.1.
-- Full refresh_forecasts.py on synthetic observations and external inputs, actual uploaded models: 14 forecasts, two levels, seven dates; publish/read-back and Market Watch creation.
-- Deployment-schema price importer without clean_prices; lookup column order normalisation.
-- Cumulative bundle apply, idempotence, historical preservation, lookup corrections and schema checks.
-- Corrupted checksum, invalid forecasts and archive traversal rejected; transaction rollback verified.
-- Concurrent bundle application: only one commit.
-- Mocked source refresh: weather, official CPI Parquet path, holiday library, external tables/files, cache reuse.
-- All 16 Malaysia holiday subdivision codes accepted by the pinned library.
-- Mocked GitHub transport: incomplete publication ignored, corrupt download discarded, temporary files removed, immutable archive published before manifest, upload failure stops publication, active job avoids repeated dispatch.
-- Streamlit admin password gating, cooldown and status rerun with mocked dispatch.
-- Home/Overview/Analysis/Basket, catalogs/search, menu addition, quantity/removal and repeated navigation on fixture; warm repeated navigation executed no new database queries.
-- Workflow structure, compileall, pyflakes and dependency resolution dry run.
+Passed tests:
 
-Not performed: real GitHub/Streamlit account configuration; workflow dispatch/publication on the user's account; live nationwide 80-million-row refresh; cloud transfer/latency measurements. Fixture tests do not establish production memory or time requirements. The first real workflow run remains the deployment acceptance test.
+1. Seed variants: LF, CRLF, UTF-8 BOM, legacy raw digest, missing companion with pinned digest, uppercase/BOM checksum, and no final newline.
+2. Actual local Git repository with core.autocrlf=true: commit a CRLF seed, clone with LF checkout, verify old checksum compatibility and identical data.
+3. Reject altered values, malformed/empty checksum, missing required seed, duplicate dates, missing state/day, invalid humidity/rain, NaN and wrong columns.
+4. Preflight: missing seed/model and corrupt scope fail BEFORE database download; correct files pass.
+5. curl HTTP 503 retry, permanent 403 stop, and exhausted TLS/transport failures; no insecure TLS flags.
+6. Actual uploaded 18,272-row seed, 16 states, daily continuity; only four missing days/state requested under simulated sources.
+7. Retry exhaustion, 800-day chunks, checkpoint recovery and no partial publication.
+8. External weather/CPI/calendar refresh with simulated source responses; holiday subdivisions for all 16 states/territories.
+9. Both real model manifests/contracts and predictions over 21 horizons.
+10. Full inference script on synthetic source data with ACTUAL models and BOM-prefixed manifests: 14 forecasts, 2 levels, 7 dates, write/read-back and Market Watch.
+11. Price importer without duplicate clean_prices, and lookup column order normalisation.
+12. Bundle idempotence, historical preservation, lookup corrections, corrupt checksum/path rejection, semantic validation, rollback and concurrent application.
+13. GitHub transport simulation: no incomplete publication, archive-before-manifest ordering, upload failure stop, active-job dispatch guard.
+14. Admin password, dispatch cooldown and status rerun.
+15. Full Home/Overview/Analysis/Basket and catalog regression suite on fixture; quantity/removal; repeated warm navigation with zero new database queries.
+16. Python compilation and pyflakes.
+
+Not verified: live new GitHub Actions run after these changes, account permissions, provider connectivity from that runner, and nationwide full-scale memory/time. A real cloud acceptance run is still required. No production data or account settings were modified by these tests.
