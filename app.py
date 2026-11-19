@@ -994,10 +994,10 @@ def project_root(db):
 def signature(db):
     s=db.stat();wal=Path(str(db)+'.wal');return (s.st_mtime_ns,s.st_size,wal.stat().st_mtime_ns if wal.exists() else 0)
 
-@st.cache_data(ttl=300,show_spinner=False)
+@st.cache_data(ttl=300,max_entries=8,show_spinner=False)
 def sql(db,stamp,query,params=()):
-    with duckdb.connect(str(db),read_only=True) as con:
-        return con.execute(query,list(params)).df()
+    from cloud_runtime import query_dataframe
+    return query_dataframe(db,query,params)
 
 class Store:
     def __init__(self,db):
