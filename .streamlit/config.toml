@@ -1,0 +1,11 @@
+# Put this file at AgroVista_V2/.streamlit/config.toml (next to your project root)
+[theme]
+base = "light"
+primaryColor = "#0f7b5a"
+backgroundColor = "#f3f7f4"
+secondaryBackgroundColor = "#e9f1ec"
+textColor = "#12332a"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
