@@ -1068,6 +1068,46 @@ a[href^="https://streamlit.io/cloud"]{display:none!important}
 }
 [class*="st-key-menu_actions_"] [data-testid="stHorizontalBlock"]{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
 @media(max-width:780px){[class*="st-key-menu_actions_"] [data-testid="stHorizontalBlock"]{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+
+/* Catalog polish: desktop gallery and mobile list have separate layouts. */
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid) [data-testid="stHorizontalBlock"]{gap:14px!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]){box-sizing:border-box;height:100%!important;padding:14px!important;border:1px solid var(--av-line-2)!important;border-radius:14px!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stVerticalBlock"]{gap:8px!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) :is([data-testid="stImage"] img,.catalog-photo,.menu-card-photo){box-sizing:border-box;width:100%!important;max-width:100%!important;height:auto!important;aspect-ratio:16 / 10!important;object-fit:contain!important;border:1px solid var(--av-line-2)!important;border-radius:10px!important;background:#fff;margin:0!important;padding:4px!important}
+[class*="st-key-menu_card_"] [data-testid="stImage"] img{object-fit:cover!important;padding:0!important}
+.st-key-catalog_items_grid .catalog-name,.st-key-catalog_menus_grid .menu-card-title{font-weight:650!important;line-height:1.45!important;overflow-wrap:break-word!important;margin:0!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stCaptionContainer"]{margin:3px 0 6px!important}
+.st-key-catalog_menus_grid .menu-card-meta{margin:6px 0 10px!important;line-height:1.5!important;color:var(--av-muted)}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid) :is(button,[data-testid="stLinkButton"] a){box-sizing:border-box;min-height:44px!important;padding:9px 10px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:6px!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid) :is(button p,[data-testid="stLinkButton"] a p){margin:0!important;line-height:1.35!important;overflow-wrap:normal!important;font-size:.85rem!important}
+@media(min-width:1001px){
+.st-key-mobile_catalog_category{display:none!important}
+.st-key-catalog_category_nav{display:block!important}
+.st-key-catalog_item_layout>[data-testid="stVerticalBlock"]>[data-testid="stHorizontalBlock"]{display:flex!important;align-items:flex-start!important}
+.st-key-catalog_category_nav button{margin-bottom:4px;text-align:left;justify-content:flex-start}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid) [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr))!important;align-items:stretch!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:column!important;gap:12px!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stColumn"]{width:100%!important;flex:1 1 auto!important;min-width:0!important}
+.st-key-catalog_items_grid .catalog-name,.st-key-catalog_menus_grid .menu-card-title{height:4.35em!important;min-height:4.35em!important;font-size:.88rem!important;display:-webkit-box!important;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden!important}
+.st-key-catalog_menus_grid .menu-card-meta{height:1.5em!important;min-height:1.5em!important}
+[class*="st-key-menu_actions_"] [data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:column!important;gap:8px!important}
+}
+@media(max-width:1000px){
+.st-key-mobile_catalog_category{display:block!important}
+.st-key-catalog_item_layout>[data-testid="stVerticalBlock"]>[data-testid="stHorizontalBlock"]{display:flex!important;flex-direction:column!important;gap:0!important}
+.st-key-catalog_item_layout [data-testid="stColumn"]:has(.st-key-catalog_category_nav){display:none!important}
+.st-key-catalog_item_layout [data-testid="stColumn"]{width:100%!important;min-width:0!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid) [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:1fr!important;gap:12px!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]){padding:12px!important;height:100%!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:clamp(80px,23vw,112px) minmax(0,1fr)!important;align-items:start!important;gap:12px!important}
+:is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]) [data-testid="stColumn"]{width:100%!important;min-width:0!important}
+.st-key-catalog_items_grid .catalog-name,.st-key-catalog_menus_grid .menu-card-title{height:auto!important;min-height:0!important;font-size:.88rem!important;display:block!important;overflow:visible!important}
+.st-key-catalog_menus_grid .menu-card-meta{height:auto!important;min-height:0!important;font-size:.8rem!important;margin:6px 0 10px!important}
+[class*="st-key-menu_actions_"] [data-testid="stHorizontalBlock"]{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+.st-key-catalog_menus_grid :is(button,[data-testid="stLinkButton"] a){padding:8px 5px!important;gap:3px!important}
+.st-key-catalog_menus_grid :is(button p,[data-testid="stLinkButton"] a p){font-size:.75rem!important;white-space:nowrap!important}
+.st-key-catalog_menus_grid [data-testid="stLinkButton"] a :is(svg,span.material-symbols-rounded){font-size:12px!important;width:12px!important}
+}
 </style>'''    
 
 def esc(v):return html.escape(str(v),quote=True)
@@ -2434,9 +2474,16 @@ def item_catalog(root,available,in_basket=None,selected_code=None):
     categories=['All',*sorted(items.category.unique(),key=str.casefold)]
     if st.session_state.get('catalog_category_choice') not in categories:
         st.session_state['catalog_category_choice']='All'
-    category=st.selectbox('Category',categories,key='catalog_category_choice')
+    with st.container(key='mobile_catalog_category'):
+        category=st.selectbox('Category',categories,key='catalog_category_choice')
     with st.container(key='catalog_item_layout'):
-        content=st.container()
+        sidebar,content=st.columns([1,5],gap='medium')
+        with sidebar,st.container(key='catalog_category_nav'):
+            st.caption('Category')
+            for option in categories:
+                st.button(option,key=f'catalog_category_{option}',width='stretch',
+                          type='primary' if category==option else 'secondary',
+                          on_click=st.session_state.__setitem__,args=('catalog_category_choice',option))
         with content:
             search=st.text_input('Search items',placeholder='Enter an item name',key='catalog_search').strip()
             items=items[items.item.str.contains(search,case=False,regex=False)]
