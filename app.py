@@ -1182,20 +1182,14 @@ a[href^="https://streamlit.io/cloud"]{display:none!important}
 [data-testid="stDialog"] [role="dialog"]>button[aria-label="Close"]{top:14px!important;right:14px!important;min-width:32px;min-height:32px}
 }
 
-/* Permanent catalog boundaries; reset the browser's default list indentation. */
-[data-testid="stDialog"] :is([class*="st-key-ingredient_card_"],[data-testid="stVerticalBlockBorderWrapper"]){border:2px solid #739389!important;background:#fff!important}
+/* White catalog surfaces, soft green details, and original thin borders. */
 [data-testid="stDialog"]>div:has(>[role="dialog"]),[data-testid="stDialog"] [role="dialog"],
 [data-testid="stDialog"] [role="dialog"]>div{background:#fff!important}
-[data-testid="stDialog"] [role="dialog"]{--av-line:#739389;--av-line-2:#739389}
-[data-testid="stDialog"] :is([data-testid="stVerticalBlockBorderWrapper"],button,[data-testid="stLinkButton"] a,
-[data-baseweb="select"]>div,[data-baseweb="input"],[data-baseweb="base-input"],
-.catalog-photo,.catalog-photo-placeholder,.menu-card-photo,.menu-detail-title,.menu-other-ingredients li){border:2px solid #739389!important;box-sizing:border-box!important}
-[data-testid="stDialog"] [data-testid="stImage"] img{border:2px solid #739389!important;box-sizing:border-box!important}
-[data-testid="stDialog"] :is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]){border:2px solid #739389!important;background:#fff!important}
-[data-testid="stDialog"] .menu-detail-title{border-left:4px solid var(--av-green)!important;background:#fff!important}
-[data-testid="stDialog"] :is(button,[data-testid="stLinkButton"] a):focus-visible{outline:3px solid var(--av-green)!important;outline-offset:2px}
+[data-testid="stDialog"] :is([class*="st-key-item_card_"],[class*="st-key-menu_card_"],[class*="st-key-ingredient_card_"]){background:var(--av-mint)!important;border:1px solid var(--av-line-2)!important}
+[data-testid="stDialog"] .menu-detail-title{background:var(--av-mint)!important;border:1px solid var(--av-line-2)!important;border-left:4px solid var(--av-green)!important}
+[data-testid="stDialog"] :is([data-testid="stImage"] img,.catalog-photo,.catalog-photo-placeholder,.menu-card-photo){background:#fff!important;border:1px solid var(--av-line-2)!important}
 [data-testid="stDialog"] ul.menu-other-ingredients{list-style:none!important;margin:0!important;padding:0!important;width:100%!important;box-sizing:border-box!important}
-[data-testid="stDialog"] ul.menu-other-ingredients li{margin:0!important;min-width:0!important;background:#fff!important}
+[data-testid="stDialog"] ul.menu-other-ingredients li{margin:0!important;min-width:0!important;background:var(--av-mint)!important;border:1px solid var(--av-line-2)!important}
 /* Real image column: no absolute image positioning or artificial left padding. */
 .st-key-basket_modern [class*="st-key-basket_row_"]{padding:10px 0!important;position:static!important}
 .st-key-basket_modern [class*="st-key-basket_row_"] .basket-thumb{position:static!important;display:block!important;width:48px!important;height:48px!important;object-fit:contain!important;margin:0!important}
