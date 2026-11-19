@@ -3361,10 +3361,85 @@ def mobile_cloud_chrome():
         component_html("""<script>
         (() => {
           const css = '@media(max-width:1000px){[class*="viewerBadge"],[class*="ViewerBadge"],a[href="https://streamlit.io/cloud"],a:has([data-testid="appCreatorAvatar"]),[data-testid="appCreatorAvatar"]{display:none!important}}';
+function installDropdownKeyboardGuard(host) {
+  const doc = host.document;
+  if (host.__agrovistaDropdownKeyboardV1) return;
+  const selector = '[data-testid="stSelectbox"] input[role="combobox"], [data-testid="stMultiSelect"] input[role="combobox"], [data-testid="stMultiselect"] input[role="combobox"]';
+  const managed = new Map();
+  const mobile = () => host.matchMedia('(max-width: 1000px)').matches &&
+    (host.matchMedia('(pointer: coarse)').matches || host.navigator.maxTouchPoints > 0);
+  function apply(input, state, editing) {
+    state.editing = editing;
+    const locked = mobile() && !editing;
+    const readOnly = locked || state.originalReadOnly;
+    const mode = locked ? 'none' : state.originalInputMode;
+    if (input.readOnly !== readOnly) input.readOnly = readOnly;
+    if (mode === null) {
+      if (input.hasAttribute('inputmode')) input.removeAttribute('inputmode');
+    } else if (input.getAttribute('inputmode') !== mode) input.setAttribute('inputmode', mode);
+  }
+  function prepare(input) {
+    let state = managed.get(input);
+    if (!state) {
+      // Native non-searchable/disabled selectors keep their own behavior.
+      if (input.disabled || input.readOnly || input.getAttribute('inputmode') === 'none') return null;
+      state = {originalReadOnly: input.readOnly, originalInputMode: input.getAttribute('inputmode'), editing: false, refocusing: false};
+      managed.set(input, state);
+    }
+    return state;
+  }
+  function scan() {
+    doc.querySelectorAll(selector).forEach(input => {
+      const state = prepare(input);
+      if (!state) return;
+      if (input.getAttribute('aria-expanded') !== 'true') state.editing = false;
+      apply(input, state, state.editing);
+    });
+    for (const [input] of managed) if (!input.isConnected) managed.delete(input);
+  }
+  function onPointer(event) {
+    if (!mobile() || event.pointerType === 'mouse') return;
+    const target = event.target;
+    const widget = target.closest?.('[data-testid="stSelectbox"], [data-testid="stMultiSelect"], [data-testid="stMultiselect"]');
+    for (const [input, state] of managed) if (!widget || !widget.contains(input)) apply(input, state, false);
+    const input = widget?.querySelector('input[role="combobox"]');
+    if (!input || input.disabled) return;
+    const state = prepare(input);
+    if (!state) return;
+    const explicitTextTap = target === input && input.getAttribute('aria-expanded') === 'true';
+    apply(input, state, explicitTextTap);
+    if (explicitTextTap) {
+      // iOS needs focus renewed inside the user gesture after a readonly focus.
+      state.refocusing = true;
+      input.blur();
+      input.focus({preventScroll: true});
+      state.refocusing = false;
+    }
+  }
+  function onFocusOut(event) {
+    const state = managed.get(event.target);
+    if (state && !state.refocusing) apply(event.target, state, false);
+  }
+  let pending = false;
+  const observer = new host.MutationObserver(() => {
+    if (pending) return;
+    pending = true;
+    host.requestAnimationFrame(() => { pending = false; scan(); });
+  });
+  observer.observe(doc.documentElement, {childList: true, subtree: true, attributes: true,
+    attributeFilter: ['aria-expanded', 'readonly', 'inputmode', 'disabled']});
+  doc.addEventListener('pointerdown', onPointer, true);
+  doc.addEventListener('focusout', onFocusOut, true);
+  host.addEventListener('resize', scan);
+  host.__agrovistaDropdownKeyboardV1 = {observer, scan};
+  scan();
+}
+
           let frame = window;
           for(let depth=0; depth<4; depth++) {
             try {
               const doc=frame.document;
+              installDropdownKeyboardGuard(frame);
               if(!doc.getElementById('agrovista-mobile-cloud-chrome')) {
                 const style=doc.createElement('style');
                 style.id='agrovista-mobile-cloud-chrome'; style.textContent=css;
