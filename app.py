@@ -1045,6 +1045,7 @@ class Store:
             fields.append('COALESCE('+','.join(candidates+[fallback])+f') AS {ident(name)}' if candidates else fallback+f' AS {ident(name)}')
         return '(SELECT '+','.join(fields)+' FROM clean_joined_prices c '+' '.join(joins)+')'
     def snapshot(self):
+        if '_cached_snapshot' in self.__dict__:return self._cached_snapshot
         d=self.q('SELECT MAX(CAST(date AS DATE)) last_date FROM clean_joined_prices')
         if pd.notna(d.iloc[0,0]):return pd.Timestamp(d.iloc[0,0])
         if 'daily_state_prices' in self.tables and 'date' in self.cols['daily_state_prices']:
@@ -1148,6 +1149,7 @@ class Store:
         MEDIAN(price) price FROM {self.source} WHERE {' AND '.join(where)}
         GROUP BY CAST(date AS DATE),state,item_code,premise_code''',params)
     def batch(self):
+        if '_cached_batch' in self.__dict__:return self._cached_batch
         req={'batch_id','forecast_today','forecast_date','level','state','item_code','premise_code','predicted_price'}
         if FORECAST not in self.tables or not req<=self.cols[FORECAST]:return None
         sort='MAX(generated_at_utc)' if 'generated_at_utc' in self.cols[FORECAST] else 'MAX(forecast_today)'
@@ -2986,6 +2988,19 @@ def landing_page():
         st.html('<div class="landing-footer"><strong>AgroVista</strong><p>Price data from PriceCatcher · Forecasts and basket totals are estimates.</p></div>')
 
 
+@st.cache_data(ttl=3600,max_entries=2,show_spinner=False)
+def cached_navigation_data(database,stamp):
+    store=Store(database)
+    batch=store.batch()
+    snapshot=store.snapshot()
+    catalogue=store.catalogue(project_root(Path(database)))
+    premises=store.premises()
+    metadata=dict(store.__dict__)
+    metadata['_cached_batch']=batch
+    metadata['_cached_snapshot']=snapshot
+    return metadata,batch,snapshot,catalogue,premises
+
+
 def main():
     st.set_page_config(page_title='AgroVista',page_icon='🌿',layout='wide',initial_sidebar_state='expanded')
     st.markdown(CSS,unsafe_allow_html=True)
@@ -3004,27 +3019,31 @@ def main():
                           type='primary' if option==page else 'secondary',
                           on_click=st.session_state.__setitem__,args=('page',option))
         status=st.empty()
-    if page=='Home':
-        landing_page()
-        return
-    status.html(sidebar_data(None,None,today))
-    try:
-        db=find_db();root=project_root(db);store=Store(db);batch=store.batch()
-        status.html(sidebar_data(store.snapshot(),batch.forecast_today if batch is not None else None,today))
-        cat=store.catalogue(root);prem=store.premises()
-        if cat.empty and page!='Market Overview':st.error('No eligible agro-food items with complete latest-batch forecasts. Publish a valid Notebook 07 forecast batch first.');return
-        if prem.empty and page!='Market Overview':st.warning('No eligible premise forecasts in this batch. State analysis remains available.')
-        if page=='Market Overview':overview(store,cat,root,batch)
-        elif page=='Price Analysis & Forecast':analysis(store,cat,prem,root,batch,today)
-        elif page=='Basket Comparison':
-            with st.container(key='basket_modern'):price_comparison(store,cat,prem,root,today)
-        st.markdown('<div class="app-footer">AgroVista · PriceCatcher reported prices · Forecasts are estimates · '+today.strftime('%d %b %Y')+' (Malaysia)</div>',unsafe_allow_html=True)
-    except (duckdb.Error,FileNotFoundError,RuntimeError,OSError) as error:
-        st.error(str(error))
-        if isinstance(error,duckdb.OutOfMemoryException):
-            st.info('This query exceeded the dashboard memory budget. Existing data has not been changed. Please share the last [AgroVista query] log lines so the remaining query can be optimised.')
-        else:
-            st.info('Check the DuckDB path, schema and error above. Existing data has not been changed.')
+    content=st.empty()
+    content.empty()
+    with content.container():
+        if page=='Home':
+            landing_page()
+            return
+        status.html(sidebar_data(None,None,today))
+        try:
+            db=find_db();root=project_root(db)
+            metadata,batch,snapshot,cat,prem=cached_navigation_data(str(db),signature(db))
+            store=Store.__new__(Store);store.__dict__.update(metadata)
+            status.html(sidebar_data(store.snapshot(),batch.forecast_today if batch is not None else None,today))
+            if cat.empty and page!='Market Overview':st.error('No eligible agro-food items with complete latest-batch forecasts. Publish a valid Notebook 07 forecast batch first.');return
+            if prem.empty and page!='Market Overview':st.warning('No eligible premise forecasts in this batch. State analysis remains available.')
+            if page=='Market Overview':overview(store,cat,root,batch)
+            elif page=='Price Analysis & Forecast':analysis(store,cat,prem,root,batch,today)
+            elif page=='Basket Comparison':
+                with st.container(key='basket_modern'):price_comparison(store,cat,prem,root,today)
+            st.markdown('<div class="app-footer">AgroVista · PriceCatcher reported prices · Forecasts are estimates · '+today.strftime('%d %b %Y')+' (Malaysia)</div>',unsafe_allow_html=True)
+        except (duckdb.Error,FileNotFoundError,RuntimeError,OSError) as error:
+            st.error(str(error))
+            if isinstance(error,duckdb.OutOfMemoryException):
+                st.info('This query exceeded the dashboard memory budget. Existing data has not been changed. Please share the last [AgroVista query] log lines so the remaining query can be optimised.')
+            else:
+                st.info('Check the DuckDB path, schema and error above. Existing data has not been changed.')
 
 if __name__=='__main__':
     if sys.argv[1:]==['--seed-basket-menus']:
