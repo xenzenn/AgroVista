@@ -1,0 +1,43 @@
+name: Refresh dashboard data
+on:
+  workflow_dispatch:
+  schedule:
+    # 09:17 Malaysia time (UTC+8); schedules may start later when runners are busy.
+    - cron: '17 1 * * *'
+permissions:
+  contents: write
+concurrency:
+  group: agrovista-data-refresh
+  cancel-in-progress: false
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      PYTHONUNBUFFERED: '1'
+      OMP_NUM_THREADS: '2'
+      OPENBLAS_NUM_THREADS: '2'
+      AGROVISTA_DUCKDB_MEMORY: '2GB'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-refresh.txt
+      - name: Install inference dependencies
+        run: python -m pip install -r requirements-refresh.txt
+      - name: Refresh and publish update
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python run_cloud_refresh.py
+      - name: Keep refresh audits
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: refresh-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            data/audit/refresh/
+            cloud_output/manifest-*.json
+          if-no-files-found: ignore
+          retention-days: 14

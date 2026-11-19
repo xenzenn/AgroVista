@@ -1,0 +1,11 @@
+# APPEND these lines to the existing .gitignore. Do not ignore models/ or scope/.
+.streamlit/secrets.toml
+**/__pycache__/
+*.pyc
+data/database/*.duckdb
+data/database/*.duckdb.wal
+data/database/duckdb_spill/
+data/refresh_downloads/
+data/external/final_rebuild/
+data/audit/
+cloud_output/

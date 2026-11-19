@@ -1,0 +1,18 @@
+{
+  "models/agrovista_per_horizon_candidates/state_level/selected_direct_model.joblib": {
+    "bytes": 732856,
+    "sha256": "15906dd8a0a6aa21f7275650d8a4878273a2cc27d759f3cd28f7d49385d40300"
+  },
+  "models/agrovista_per_horizon_candidates/state_level/manifest.json": {
+    "bytes": 1748,
+    "sha256": "02aaece12aa92d9c1374a6562498a2fc267e9484880a8dbc6a302eb05595a865"
+  },
+  "models/agrovista_per_horizon_candidates/premise_level/selected_direct_model.joblib": {
+    "bytes": 9197328,
+    "sha256": "79808894d16d82d0b46a3542731aa92f047590071331df0d4769a6d8d27f7a9e"
+  },
+  "models/agrovista_per_horizon_candidates/premise_level/manifest.json": {
+    "bytes": 1756,
+    "sha256": "4b8eaced3851713524a1d8bc3a293b252287f4a30c023e1734dabafcd06e8a36"
+  }
+}

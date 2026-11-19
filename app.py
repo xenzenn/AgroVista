@@ -3286,6 +3286,8 @@ def main():
         status.html(sidebar_data(None,None,today))
         try:
             db=find_db();root=project_root(db)
+            from cloud_refresh_ui import sync_if_enabled,admin_panel
+            sync_if_enabled(db)
             metadata,batch,snapshot,cat,prem=cached_navigation_data(str(db),signature(db))
             store=Store.__new__(Store);store.__dict__.update(metadata)
             status.html(sidebar_data(store.snapshot(),batch.forecast_today if batch is not None else None,today))
@@ -3296,6 +3298,7 @@ def main():
             elif page=='Price Analysis & Forecast':analysis(store,cat,prem,root,batch,today)
             elif page=='Basket Comparison':
                 with st.container(key='basket_modern'):price_comparison(store,cat,prem,root,today)
+            admin_panel()
             st.markdown('<div class="app-footer">AgroVista · PriceCatcher reported prices · Forecasts are estimates · '+today.strftime('%d %b %Y')+' (Malaysia)</div>',unsafe_allow_html=True)
         except (duckdb.Error,FileNotFoundError,RuntimeError,OSError) as error:
             st.error(str(error))
