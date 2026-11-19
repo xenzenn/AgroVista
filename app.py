@@ -1181,6 +1181,35 @@ a[href^="https://streamlit.io/cloud"]{display:none!important}
 [data-testid="stDialog"] [role="dialog"] [slot="title"]{padding:4px 32px 18px 0!important;margin:0!important;min-width:0!important}
 [data-testid="stDialog"] [role="dialog"]>button[aria-label="Close"]{top:14px!important;right:14px!important;min-width:32px;min-height:32px}
 }
+
+/* Permanent catalog boundaries; reset the browser's default list indentation. */
+[data-testid="stDialog"] :is([class*="st-key-ingredient_card_"],[data-testid="stVerticalBlockBorderWrapper"]){border:2px solid #739389!important;background:#fff!important}
+[data-testid="stDialog"]>div:has(>[role="dialog"]),[data-testid="stDialog"] [role="dialog"],
+[data-testid="stDialog"] [role="dialog"]>div{background:#fff!important}
+[data-testid="stDialog"] [role="dialog"]{--av-line:#739389;--av-line-2:#739389}
+[data-testid="stDialog"] :is([data-testid="stVerticalBlockBorderWrapper"],button,[data-testid="stLinkButton"] a,
+[data-baseweb="select"]>div,[data-baseweb="input"],[data-baseweb="base-input"],
+.catalog-photo,.catalog-photo-placeholder,.menu-card-photo,.menu-detail-title,.menu-other-ingredients li){border:2px solid #739389!important;box-sizing:border-box!important}
+[data-testid="stDialog"] [data-testid="stImage"] img{border:2px solid #739389!important;box-sizing:border-box!important}
+[data-testid="stDialog"] :is([class*="st-key-item_card_"],[class*="st-key-menu_card_"]){border:2px solid #739389!important;background:#fff!important}
+[data-testid="stDialog"] .menu-detail-title{border-left:4px solid var(--av-green)!important;background:#fff!important}
+[data-testid="stDialog"] :is(button,[data-testid="stLinkButton"] a):focus-visible{outline:3px solid var(--av-green)!important;outline-offset:2px}
+[data-testid="stDialog"] ul.menu-other-ingredients{list-style:none!important;margin:0!important;padding:0!important;width:100%!important;box-sizing:border-box!important}
+[data-testid="stDialog"] ul.menu-other-ingredients li{margin:0!important;min-width:0!important;background:#fff!important}
+/* Real image column: no absolute image positioning or artificial left padding. */
+.st-key-basket_modern [class*="st-key-basket_row_"]{padding:10px 0!important;position:static!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] .basket-thumb{position:static!important;display:block!important;width:48px!important;height:48px!important;object-fit:contain!important;margin:0!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stColumn"]{min-width:0!important;width:100%!important;grid-column:auto!important}
+@media(min-width:1001px){
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:48px minmax(0,1fr) 148px 88px!important;gap:10px!important;align-items:center!important}
+}
+@media(max-width:1000px){
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:48px minmax(0,1fr) 72px!important;gap:10px!important;align-items:center!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stColumn"]:nth-child(1){grid-column:1!important;grid-row:1 / 3!important;align-self:start!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stColumn"]:nth-child(2){grid-column:2 / 4!important;grid-row:1!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stColumn"]:nth-child(3){grid-column:2!important;grid-row:2!important}
+.st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stColumn"]:nth-child(4){grid-column:3!important;grid-row:2!important}
+}
 </style>'''    
 
 def esc(v):return html.escape(str(v),quote=True)
@@ -3046,7 +3075,7 @@ def price_comparison(store,cat,prem,root,today):
                 valid=code in area_items and unit.lower().replace(' ','')==entry.expected_unit.lower().replace(' ','')
                 status=' · In basket' if code in in_basket else ' · Unavailable' if not valid else ''
                 can_add=valid and code not in in_basket
-                with card,st.container(border=True):
+                with card,st.container(border=True,key=f'ingredient_card_{code}_{entry.ingredient_order}'):
                     catalog_image(root,pd.Series({'item':name,'item_code':code}))
                     st.markdown(f'<div class="catalog-name" title="{esc(name)}">{esc(name)}</div>',unsafe_allow_html=True)
                     measure=getattr(entry,'original_measure',None) or f'{float(entry.quantity):g} × {unit or entry.expected_unit}'
@@ -3109,11 +3138,12 @@ def price_comparison(store,cat,prem,root,today):
             item['item_code']=item_code
             image, caption=food_image(root,item)
             with st.container(key=f'basket_row_{item_code}'):
-                name,qty,remove=st.columns([3,1,1],vertical_alignment='center',gap='small')
+                photo,name,qty,remove=st.columns([.22,2.78,1,1],vertical_alignment='center',gap='small')
+                with photo:
+                    st.html(f'<img class="basket-thumb" src="{image}" alt="" title="{esc(caption)}">')
                 with name:
-                    st.html(f'<div class="basket-item-cell"><img class="basket-thumb" src="{image}" alt="" title="{esc(caption)}">'
-                            f'<div><div class="basket-item-name">{esc(item["item"])}</div>'
-                            f'<div class="basket-item-meta">{esc(item.unit)} per unit · {esc(item.item_category)}</div></div></div>')
+                    st.html(f'<div class="basket-item-name">{esc(item["item"])}</div>'
+                            f'<div class="basket-item-meta">{esc(item.unit)} per unit · {esc(item.item_category)}</div>')
                 with qty:
                     entry['quantity']=st.number_input('Quantity for '+item['item']+' · '+item.unit,min_value=.001,
                         max_value=100000.,value=float(entry['quantity']),step=.001,format='%.3f',key=f'basket_qty_{item_code}',
