@@ -1019,7 +1019,38 @@ a[href^="https://streamlit.io/cloud"]{display:none!important}
 .st-key-menu_detail [data-testid="stHorizontalBlock"]{gap:10px!important}
 .block-container{padding-bottom:calc(112px + env(safe-area-inset-bottom))!important}
 }
-</style>''' 
+/* Final catalog and navigation geometry. */
+.landing-brand-centered{display:flex;justify-content:center;align-items:center;width:100%}
+.st-key-landing_nav .landing-brand-centered .landing-logo{margin:0 auto!important;object-position:center}
+.menu-detail-title{border:1px solid var(--av-green);border-left-width:4px}
+.st-key-catalog_menus_grid [data-testid="stHorizontalBlock"]{align-items:stretch!important;grid-auto-rows:1fr}
+.st-key-catalog_menus_grid [data-testid="stColumn"]{display:flex;flex-direction:column;align-self:stretch!important}
+[class*="st-key-menu_card_"]{height:100%!important;box-sizing:border-box}
+.st-key-catalog_menus_grid .menu-card-title{height:5.2em!important;min-height:5.2em!important;line-height:1.3!important;overflow:hidden;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical}
+.st-key-catalog_menus_grid .menu-card-meta{height:1.5em!important;min-height:1.5em!important}
+.st-key-catalog_menus_grid :is(button,[data-testid="stLinkButton"] a){min-height:48px!important}
+@media(max-width:1000px){
+.st-key-mobile_nav{left:max(12px,env(safe-area-inset-left))!important;right:auto!important;width:calc(100% - max(12px,env(safe-area-inset-left)) - max(12px,env(safe-area-inset-right)))!important;max-width:calc(100% - 24px)!important;box-sizing:border-box!important;margin:0!important}
+.st-key-mobile_nav [data-testid="stHorizontalBlock"]{width:100%!important;min-width:0!important;gap:4px!important}
+.st-key-mobile_nav button{box-sizing:border-box!important;min-width:0!important;box-shadow:none!important}
+.st-key-mobile_nav button>div{display:flex!important;flex-direction:column!important;gap:3px!important}
+.st-key-mobile_nav button p{font-size:.72rem!important}
+}
+@media(max-width:780px){
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) [data-testid="stHorizontalBlock"]{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) [data-testid="stColumn"]{min-width:0!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) [data-testid="stVerticalBlockBorderWrapper"]{padding:8px!important}
+[class*="st-key-menu_card_"]{padding:8px!important}
+.st-key-catalog_menus_grid .menu-card-title{font-size:.78rem!important;overflow-wrap:anywhere}
+:is(.st-key-catalog_items_grid,.st-key-catalog_ingredients_grid) .catalog-name{font-size:.74rem!important;line-height:1.35!important;min-height:5.4em}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) :is(button p,[data-testid="stLinkButton"] a p){font-size:.75rem!important;line-height:1.25!important;overflow-wrap:anywhere}
+.st-key-catalog_menus_grid [data-testid="stLinkButton"] a{padding:6px!important}
+.st-key-catalog_menus_grid [data-testid="stLinkButton"] [data-testid="stIconMaterial"]{font-size:14px!important}
+.st-key-catalog_menus_grid .menu-card-meta,.st-key-catalog_ingredients_grid .menu-card-meta{font-size:.75rem!important}
+.catalog-photo{height:76px!important;object-fit:contain!important}
+.st-key-catalog_ingredients_grid label p{font-size:.75rem!important}
+}
+</style>'''  
 
 def esc(v):return html.escape(str(v),quote=True)
 def money(v):return f'RM {float(v):,.2f}' if v is not None and pd.notna(v) and np.isfinite(float(v)) else '—'
@@ -1697,7 +1728,7 @@ def overview(store,cat,root,batch):
         with st.container(key='overview_kpis'):
             for col,label,value in zip(st.columns(4,gap='small'),
                     ['Items with forecasts','Reporting premises','Known premise types',
-                     'States & territories reporting' if state is None else 'Districts reporting'],
+                     'States reporting' if state is None else 'Districts reporting'],
                     [cat.item_code.nunique(),totals['premises'],totals['premise_type_count'],
                      totals['states' if state is None else 'districts']]):
                 col.metric(label,f'{int(value):,}', help=('Latest saved forecast batch' if label=='Items with forecasts'
@@ -2341,9 +2372,9 @@ def catalog_image(root,item):
     st.markdown(f'<img class="catalog-photo" src="{src}" alt="">',unsafe_allow_html=True)
 
 
-def full_recipe_button(source, name, key):
+def full_recipe_button(source, name, key, compact=False):
     if isinstance(source,str) and source.startswith('https://www.ajinomoto.com.my/'):
-        st.link_button('View full recipe',source,key=key,width='stretch',
+        st.link_button('Full recipe' if compact else 'View full recipe',source,key=key,width='stretch',
                        icon=':material/open_in_new:',icon_position='right',wrap=True,
                        help=f'Open the Ajinomoto Malaysia recipe for {name} in a new tab.')
 
@@ -2373,11 +2404,9 @@ def item_catalog(root,available,in_basket=None,selected_code=None):
             with st.container(border=False,key='catalog_items_grid'):
                 for _,group in items.groupby('category',sort=True):
                     st.markdown(f'**{esc(group.category.iloc[0])}**')
-                    cards=st.columns(5,gap='small')
+                    cards=st.columns(len(group),gap='small')
                     for index,(_,item) in enumerate(group.sort_values('item').iterrows()):
-                        if index and index%5==0:
-                            cards=st.columns(5,gap='small')
-                        with cards[index%5],st.container(border=True):
+                        with cards[index],st.container(border=True):
                             catalog_image(root,item)
                             st.markdown(f'<div class="catalog-name" title="{esc(item["item"])}">{esc(item["item"])}</div>',unsafe_allow_html=True)
                             st.caption(item.unit)
@@ -2792,19 +2821,19 @@ def price_comparison(store,cat,prem,root,today):
                 for index,(card,name) in enumerate(zip(cards,names)):
                     details=recipe_metadata.get(name,RECIPE_MENUS.get(name,{}))
                     servings=details.get('servings')
-                    with card,st.container(border=True):
+                    with card,st.container(border=True,key=f'menu_card_{index}'):
                         image_code=details.get('menu_id') or menu_image_code(name)
                         src=asset_image(root,'menus',image_code)
                         photo=f'<img src="{src}" alt="" loading="lazy">' if src else '<span>No photo yet</span>'
                         st.html(f'<div class="menu-card-photo">{photo}</div>')
                         serving_text=f'{esc(servings)} servings' if pd.notna(servings) and servings else ''
-                        st.html(f'<div class="menu-card-title">{esc(name)}</div>'
+                        st.html(f'<div class="menu-card-title" title="{esc(name)}">{esc(name)}</div>'
                                 f'<div class="menu-card-meta">{serving_text}</div>')
-                        st.button('View ingredients',key=f'catalog_menu_{index}',width='stretch',
+                        st.button('Ingredients',key=f'catalog_menu_{index}',width='stretch',
                                   help=f'Select basket ingredients for {name}.',
                                   on_click=st.session_state.__setitem__,args=('catalog_menu_detail',name))
                         full_recipe_button(details.get('recipe_source',details.get('source')),name,
-                                           f'catalog_recipe_{index}')
+                                           f'catalog_recipe_{index}',compact=True)
             return
         details=recipe_metadata.get(menu,RECIPE_MENUS.get(menu,{}))
         with st.container(key='menu_detail'):
@@ -3063,10 +3092,7 @@ def landing_page():
     logo=brand_image()
     with st.container(key='landing_page'):
         with st.container(key='landing_nav'):
-            brand,action=st.columns([3,1],vertical_alignment='center')
-            brand.html(f'<img class="landing-logo" src="{logo}" alt="AgroVista">' if logo else '<strong>AgroVista</strong>')
-            action.button('Open Dashboard',key='landing_nav_open',width='stretch',
-                          on_click=st.session_state.__setitem__,args=('page','Market Overview'))
+            st.html(f'<div class="landing-brand-centered"><img class="landing-logo" src="{logo}" alt="AgroVista"></div>' if logo else '<div class="landing-brand-centered"><strong>AgroVista</strong></div>')
         with st.container(key='landing_hero'):
             copy,visual=st.columns([1.12,1],vertical_alignment='center',gap='large')
             copy.html('''<div class="landing-copy">
