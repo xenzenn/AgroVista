@@ -895,6 +895,27 @@ hr{border-color:var(--av-line)}
     .stApp:not(:has(.st-key-landing_page)) .overview-title{padding-inline:var(--header-padding-y)}
     .stApp:not(:has(.st-key-landing_page)) .dashboard-title-icon{display:none}
 }
+
+/* Overview content reflows at the available card width, including browser zoom. */
+.st-key-market_overview,.st-key-overview_toolbar{min-width:0;max-width:100%}
+.st-key-market_overview :is(.st-key-overview_top,.st-key-overview_lower) [data-testid="stHorizontalBlock"]{flex-wrap:wrap!important}
+.st-key-market_overview [data-testid="stHorizontalBlock"]:has(> [data-testid="stColumn"] [class*="st-key-overview_card_"]){flex-wrap:wrap!important}
+.st-key-market_overview [data-testid="stColumn"]:has([class*="st-key-overview_card_"]){flex:1 1 340px!important;width:auto!important;min-width:min(100%,340px)!important;max-width:100%!important}
+.st-key-overview_kpis [data-testid="stHorizontalBlock"]{flex-wrap:wrap!important}
+.st-key-overview_kpis [data-testid="stColumn"]{flex:1 1 180px!important;width:auto!important;min-width:0!important}
+.st-key-overview_card_types{container-type:inline-size}
+.overview-donut-layout{grid-template-columns:minmax(125px,.95fr) minmax(0,1.15fr);gap:14px;min-height:180px;padding:10px 0}
+.overview-donut-visual{width:100%;max-width:210px;justify-self:center;min-width:0}
+.overview-donut-visual svg{display:block;width:100%;height:auto;overflow:visible;font-family:inherit}
+.overview-legend-row{grid-template-columns:9px minmax(0,1fr) max-content;gap:7px;align-items:start}
+.overview-legend-row span{overflow-wrap:normal;word-break:normal;line-height:1.4}
+.overview-legend-row b{white-space:nowrap;font-variant-numeric:tabular-nums}
+.overview-legend-row i{margin-top:4px}
+@container(max-width:350px){.overview-donut-layout{grid-template-columns:1fr}.overview-legend{width:100%}}
+@media(max-width:1100px){
+.st-key-overview_toolbar [data-testid="stHorizontalBlock"]{flex-wrap:wrap!important}
+.st-key-overview_toolbar [data-testid="stColumn"]{flex:1 1 100%!important;width:100%!important;min-width:0!important}
+}
 </style>'''
 
 def esc(v):return html.escape(str(v),quote=True)
@@ -1578,7 +1599,7 @@ def overview(store,cat,root,batch):
                     customdata=changes.matched_premises,
                     hovertemplate='%{y}<br>%{x:+.1f}% median change<br>%{customdata} matched premises<extra></extra>'))
                 extent=max(1.0,float(changes.change_pct.abs().max()))
-                fig.update_xaxes(ticksuffix='%',nticks=5,
+                fig.update_xaxes(ticksuffix='%',nticks=3,
                     range=[min(0,float(changes.change_pct.min()))-extent*.28,
                            max(0,float(changes.change_pct.max()))+extent*.28],
                     zerolinewidth=1.5)
@@ -1701,6 +1722,14 @@ def overview(store,cat,root,batch):
                 overview_coverage('Items with state forecasts',forecast_counts,BLUE)
 
 
+@st.cache_data(ttl=3600,max_entries=24,show_spinner=False)
+def cached_price_pulse(database,stamp,first_month,last_month,codes,state,_store=None,_progress=None):
+    from pulse_history import monthly_pulse
+    return monthly_pulse(_store,pd.Period(first_month,freq='M'),pd.Period(last_month,freq='M'),
+                         list(codes),' AND state=?' if state is not None else '',
+                         [state] if state is not None else [],_progress)
+
+
 def overview_historical_pulse(store, snap, area, state_clause, state_params, outlook_codes):
     overview_panel('Historical price pulse', f'{area} · Number of forecast items whose recorded prices rose, fell or stayed stable from one month to the next')
     if not outlook_codes:
@@ -1722,8 +1751,9 @@ def overview_historical_pulse(store, snap, area, state_clause, state_params, out
     from pulse_history import monthly_pulse
     progress=st.progress(0.,text='Summarising monthly price history…')
     try:
-        changes=monthly_pulse(store,first_month,last_month,outlook_codes,state_clause,state_params,
-            lambda done,total:progress.progress(done/total,text=f'Summarising monthly price history: {done}/{total} months'))
+        changes=cached_price_pulse(store.db,store.stamp,str(first_month),str(last_month),
+            tuple(sorted(outlook_codes)),state_params[0] if state_params else None,
+            _store=store,_progress=lambda done,total:progress.progress(done/total,text=f'Summarising monthly price history: {done}/{total} months'))
     finally:
         progress.empty()
     if changes.empty:
@@ -1799,27 +1829,31 @@ def overview_panel(title,description):
 
 
 def overview_premise_donut(types):
+    import math
     labels=types.premise_type_name.fillna('Unclassified').tolist()
-    counts=types.premises.tolist()
+    counts=[int(value) for value in types.premises]
     palette=['#16674e','#58a783','#e1ac54','#378188','#a7799e','#829890']
     if len(counts)>len(palette):
         labels=labels[:5]+['Remaining types']
         counts=counts[:5]+[sum(counts[5:])]
     total=sum(counts)
-    legend=[]
-    stops=[]
-    angle=0.
+    if total<=0:
+        st.info('No reporting premises in this area.')
+        return
+    legend=[];arcs=[];angle=180.
     for label,count,color in zip(labels,counts,palette):
-        next_angle=angle+180*count/total
-        stops.append(f'{color} {angle:.5f}deg {next_angle:.5f}deg')
-        angle=next_angle
+        end=angle+180*count/total
+        x1,y1=100+82*math.cos(math.radians(angle)),100+82*math.sin(math.radians(angle))
+        x2,y2=100+82*math.cos(math.radians(end)),100+82*math.sin(math.radians(end))
+        arcs.append(f'<path d="M{x1:.4f},{y1:.4f} A82,82 0 0 1 {x2:.4f},{y2:.4f}" stroke="{color}" stroke-width="27" fill="none"/>')
+        angle=end
         legend.append(f'<div class="overview-legend-row"><i style="background:{color}"></i>'
                       f'<span>{esc(label)}</span><b title="{count:,} premises">{count/total:.1%}</b></div>')
-    gradient=', '.join([*stops,'transparent 180deg 360deg'])
-    st.html(f'<div class="overview-donut-layout"><div class="overview-donut">'
-            f'<div class="overview-donut-ring" style="background:conic-gradient(from 270deg,{gradient})"></div>'
-            f'<div class="overview-donut-total">Total<strong>{total:,}</strong></div></div>'
-            f'<div class="overview-legend">{"".join(legend)}</div></div>')
+    st.html(f'<div class="overview-donut-layout"><div class="overview-donut-visual">'
+            f'<svg viewBox="0 0 200 135" role="img" aria-label="Total {total:,} reporting premises">'
+            f'{"".join(arcs)}<text x="100" y="84" text-anchor="middle" fill="#60796e" font-size="12">Total</text>'
+            f'<text x="100" y="108" text-anchor="middle" fill="#113f34" font-size="23" font-weight="700">{total:,}</text>'
+            f'</svg></div><div class="overview-legend">{"".join(legend)}</div></div>')
 
 
 def overview_coverage(label,counts,color):
