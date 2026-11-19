@@ -1525,7 +1525,7 @@ def cached_overview_summary(database,stamp,snap,scoped_reports,scoped_dates,code
         if len(fortnight_movers)>len(movers):
             movers, mover_days = fortnight_movers, 14
 
-    return totals,item_counts,types,recent_end,movers,mover_days
+    return totals,item_counts,types,recent_end,movers,mover_days,weekly_prices
 
 
 def overview(store,cat,root,batch):
@@ -1567,7 +1567,7 @@ def overview(store,cat,root,batch):
         st.html(f'<div class="overview-selected-area">Selected state · <strong>{esc(state)}</strong></div>')
     codes=cat.item_code.astype(int).tolist()
     with st.spinner('Summarising PriceCatcher reports…'):
-        totals,item_counts,types,recent_end,movers,mover_days=cached_overview_summary(
+        totals,item_counts,types,recent_end,movers,mover_days,weekly_prices=cached_overview_summary(
             store.db,store.stamp,snap,scoped_reports,tuple(scoped_dates),tuple(codes),state,_store=store)
     recent_start=recent_end-pd.Timedelta(days=6)
 
