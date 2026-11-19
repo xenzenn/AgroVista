@@ -916,6 +916,56 @@ hr{border-color:var(--av-line)}
 .st-key-overview_toolbar [data-testid="stHorizontalBlock"]{flex-wrap:wrap!important}
 .st-key-overview_toolbar [data-testid="stColumn"]{flex:1 1 100%!important;width:100%!important;min-width:0!important}
 }
+
+/* Phone/tablet navigation and fluid dashboard content */
+.st-key-mobile_nav,.st-key-mobile_header{display:none}
+[data-testid="stSidebarCollapseButton"],[data-testid="stSidebarCollapsedControl"],
+[data-testid="stExpandSidebarButton"],button[aria-label="Collapse sidebar"],button[aria-label="Expand sidebar"]{display:none!important}
+@media(max-width:1000px){
+[data-testid="stSidebar"]{display:none!important}
+[data-testid="stAppViewContainer"]{flex-direction:column!important}
+[data-testid="stMain"]{width:100%!important;margin-left:0!important;min-width:0!important}
+.stMainBlockContainer,.block-container{width:100%!important;max-width:100%!important;padding:1rem 1rem calc(100px + env(safe-area-inset-bottom))!important}
+.st-key-mobile_header{display:block!important;margin-bottom:12px}
+.mobile-brand{display:flex;align-items:center;gap:12px;color:#123f33;font-weight:750;font-size:1.2rem}
+.mobile-brand img{width:150px;height:48px;object-fit:contain;object-position:left}
+.mobile-dates{font-size:.74rem;color:#50695e;line-height:1.5;margin:4px 0 8px}
+.st-key-mobile_nav{display:block!important;position:fixed!important;bottom:0!important;left:0!important;right:0!important;z-index:999;
+ padding:8px 10px calc(8px + env(safe-area-inset-bottom));background:#123e31;border-top:1px solid #427565;box-shadow:0 -3px 14px #123e311a}
+.st-key-mobile_nav [data-testid="stHorizontalBlock"]{display:flex!important;flex-wrap:nowrap!important;gap:5px!important}
+.st-key-mobile_nav [data-testid="stColumn"]{flex:1 1 0!important;min-width:0!important;width:0!important}
+.st-key-mobile_nav button{min-height:48px!important;width:100%;padding:5px 2px!important;border-radius:9px!important;border-color:#487966!important;background:#123e31!important;color:#fff!important}
+.st-key-mobile_nav button[kind="primary"]{background:#19815f!important;border-color:#43b48b!important}
+.st-key-mobile_nav button p{color:#fff!important;font-size:.74rem!important;white-space:nowrap}
+.st-key-mobile_nav [data-testid="stVerticalBlock"]{gap:0!important}
+.overview-title{padding:16px!important;gap:10px!important}
+.overview-title h1{font-size:clamp(1.4rem,4.6vw,2rem)!important;line-height:1.2!important;overflow-wrap:normal}
+.overview-title p{font-size:.82rem!important;line-height:1.5!important}
+}
+@media(max-width:780px){
+[data-testid="stMain"] [data-testid="stHorizontalBlock"]{flex-wrap:wrap!important}
+[data-testid="stMain"] [data-testid="stHorizontalBlock"]>[data-testid="stColumn"]{flex:1 1 100%!important;width:100%!important;min-width:0!important;max-width:100%!important}
+.st-key-mobile_nav [data-testid="stHorizontalBlock"]>[data-testid="stColumn"]{flex:1 1 0!important;width:0!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) [data-testid="stColumn"]{width:100%!important;min-width:0!important}
+:is(.st-key-overview_kpis,.st-key-basket_summary_cards) [data-testid="stHorizontalBlock"]{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important}
+.day-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:5px!important}
+.day{min-width:0!important}.day strong{font-size:.88rem!important}
+.av-price-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+.food-pic{width:100%!important;max-height:230px;object-fit:contain}
+.basket-table-head{display:none!important}
+[class*="st-key-basket_row_"]{padding-bottom:12px;border-bottom:1px solid #dce5df}
+[data-testid="stDialog"]>div{max-width:calc(100vw - 16px)!important;max-height:calc(100dvh - 24px)!important}
+[data-testid="stDialog"] [role="dialog"]{width:calc(100vw - 16px)!important;max-width:100%!important;padding:14px!important}
+.prediction-rank-place{white-space:normal!important;line-height:1.35}
+.basket-rank-place{white-space:normal!important}
+.overview-donut-layout{grid-template-columns:1fr!important}.overview-donut-visual{max-width:200px}
+.position-stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+@media(max-width:380px){
+:is(.st-key-catalog_items_grid,.st-key-catalog_menus_grid,.st-key-catalog_ingredients_grid) [data-testid="stHorizontalBlock"]{grid-template-columns:1fr!important}
+.mobile-dates{font-size:.69rem}.st-key-mobile_nav button p{font-size:.68rem!important}
+}
 </style>'''
 
 def esc(v):return html.escape(str(v),quote=True)
@@ -3020,6 +3070,17 @@ def main():
                           type='primary' if option==page else 'secondary',
                           on_click=st.session_state.__setitem__,args=('page',option))
         status=st.empty()
+    with st.container(key='mobile_header'):
+        st.html(f'<div class="mobile-brand"><img src="{logo}" alt="AgroVista"></div>' if logo else '<div class="mobile-brand">AgroVista</div>')
+        mobile_status=st.empty()
+        mobile_status.html(f'<div class="mobile-dates">Today · {datefmt(today)}</div>')
+    with st.container(key='mobile_nav'):
+        for col,(option,label) in zip(st.columns(4,gap='small'),[
+                ('Home','Home'),('Market Overview','Overview'),
+                ('Price Analysis & Forecast','Prices'),('Basket Comparison','Basket')]):
+            col.button(label,key=f'mobile_nav_{option}',width='stretch',
+                       type='primary' if option==page else 'secondary',
+                       on_click=st.session_state.__setitem__,args=('page',option))
     content=st.empty()
     content.empty()
     with content.container():
@@ -3032,6 +3093,7 @@ def main():
             metadata,batch,snapshot,cat,prem=cached_navigation_data(str(db),signature(db))
             store=Store.__new__(Store);store.__dict__.update(metadata)
             status.html(sidebar_data(store.snapshot(),batch.forecast_today if batch is not None else None,today))
+            mobile_status.html(f'<div class="mobile-dates">Latest data · {datefmt(snapshot)} &nbsp;|&nbsp; Forecast · {datefmt(batch.forecast_today if batch is not None else None)}</div>')
             if cat.empty and page!='Market Overview':st.error('No eligible agro-food items with complete latest-batch forecasts. Publish a valid Notebook 07 forecast batch first.');return
             if prem.empty and page!='Market Overview':st.warning('No eligible premise forecasts in this batch. State analysis remains available.')
             if page=='Market Overview':overview(store,cat,root,batch)
