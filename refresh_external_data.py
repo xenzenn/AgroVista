@@ -16,30 +16,6 @@ WEATHER_FIELDS = ['rain_total_mm', 'temperature_mean_c', 'humidity_mean_pct',
                   'wet_streak_days', 'dry_streak_days']
 
 
-def get_with_retry(url, *, params=None, attempts=4):
-    """Retry transient GET failures only; TLS verification remains enabled."""
-    import requests
-    import time
-    for attempt in range(1,attempts+1):
-        try:
-            response=requests.get(url,params=params,timeout=(30,120))
-            response.raise_for_status()
-            return response
-        except (requests.exceptions.Timeout,requests.exceptions.ConnectionError,
-                requests.exceptions.ChunkedEncodingError,requests.exceptions.HTTPError) as exc:
-            status=getattr(getattr(exc,'response',None),'status_code',None)
-            if status is not None and status not in (408,425,429,500,502,503,504):
-                raise
-            if attempt==attempts:
-                raise RuntimeError(f'External source unavailable after {attempts} attempts ({type(exc).__name__}). Weather progress was kept; retry with a NEW workflow run.') from exc
-            delay=min(30,2**attempt)
-            retry_after=getattr(getattr(exc,'response',None),'headers',{}).get('Retry-After','')
-            if str(retry_after).isdigit():delay=min(60,max(delay,int(retry_after)))
-            print(f'External request retry {attempt}/{attempts-1}: {type(exc).__name__}; waiting {delay}s',flush=True)
-            time.sleep(delay)
-    raise AssertionError('Unreachable retry state')
-
-
 def calendar_results(prices, holidays):
     rows = []
     holidays = holidays.assign(festival=holidays.holiday_names.str.split(r'\s*;\s*|\s+\|\s+'))
@@ -205,6 +181,7 @@ def refresh_external_data():
     from datetime import timedelta
     import json
     import numpy as np
+    import requests
 
     database = ROOT/'data/database/agrovista.duckdb'
     if not database.is_file():
@@ -235,24 +212,14 @@ def refresh_external_data():
 
     weather_columns=['temperature_2m_mean','precipitation_sum','relative_humidity_2m_mean']
     cached_path=destination/'weather_state_daily.csv'
-    checkpoint_path=destination/'.weather_checkpoint.csv'
-    required={'state','date',*weather_columns}
-    cache_parts=[]
-    for cache_file in (checkpoint_path,cached_path):
-        if not cache_file.is_file():continue
-        part=pd.read_csv(cache_file)
-        if part.empty:continue
-        if not required<=set(part.columns):
-            raise ValueError(f'Weather cache is missing {required-set(part.columns)}')
-        part['date']=pd.to_datetime(part.date,errors='raise').dt.normalize()
-        if part.duplicated(['state','date']).any():
+    cached=pd.read_csv(cached_path) if cached_path.is_file() else pd.DataFrame()
+    if not cached.empty:
+        required={'state','date',*weather_columns}
+        if not required<=set(cached.columns):
+            raise ValueError(f'Weather cache is missing {required-set(cached.columns)}')
+        cached['date']=pd.to_datetime(cached.date,errors='raise').dt.normalize()
+        if cached.duplicated(['state','date']).any():
             raise ValueError('Duplicate state/date keys in weather cache.')
-        for field in weather_columns:
-            part[field]=pd.to_numeric(part[field],errors='raise')
-            if np.isinf(part[field]).any():raise ValueError('Infinite weather cache values')
-        cache_parts.append(part[['date','state',*weather_columns]])
-    cached=(pd.concat(cache_parts,ignore_index=True).drop_duplicates(['state','date'],keep='last')
-            if cache_parts else pd.DataFrame(columns=['date','state',*weather_columns]))
     if weather_end<START:
         raise ValueError('No completed weather dates in the observed price window.')
     expected_dates=pd.date_range(START,weather_end)
@@ -266,34 +233,20 @@ def refresh_external_data():
         missing=expected_dates.difference(existing.date)
         if len(missing):
             lat,lon=STATE_COORDS[state]
-            while len(missing):
-                first=missing.min()
-                last=min(first+pd.Timedelta(days=365),missing.max())
-                needed=missing[(missing>=first)&(missing<=last)]
-                params={'latitude':lat,'longitude':lon,'start_date':str(first.date()),
-                        'end_date':str(last.date()),'daily':','.join(weather_columns),
-                        'timezone':'Asia/Kuala_Lumpur'}
-                print(f'Weather {state}: requesting {first.date()} to {last.date()}',flush=True)
-                response=get_with_retry('https://archive-api.open-meteo.com/v1/archive',params=params)
-                fresh=pd.DataFrame(response.json()['daily']).rename(columns={'time':'date'})
-                fresh['date']=pd.to_datetime(fresh.date,errors='raise').dt.normalize()
-                fresh['state']=state
-                fresh=fresh.loc[fresh.date.isin(needed),['date','state',*weather_columns]]
-                if fresh.date.duplicated().any() or len(needed.difference(fresh.date)):
-                    raise ValueError(f'Incomplete archive dates for {state}; existing published files retained.')
-                for field in weather_columns:
-                    fresh[field]=pd.to_numeric(fresh[field],errors='raise')
-                    if np.isinf(fresh[field]).any():raise ValueError('Infinite archive weather values')
-                existing=fresh.copy() if existing.empty else pd.concat([existing,fresh],ignore_index=True)
-                cached=fresh.copy() if cached.empty else pd.concat([cached,fresh],ignore_index=True)
-                cached=cached.drop_duplicates(['state','date'],keep='last')
-                # Separate progress file: never present partial weather as a published dataset.
-                temporary=checkpoint_path.with_suffix('.tmp')
-                cached.to_csv(temporary,index=False)
-                temporary.replace(checkpoint_path)
-                missing=expected_dates.difference(existing.date)
+            params={'latitude':lat,'longitude':lon,'start_date':str(missing.min().date()),
+                    'end_date':str(missing.max().date()),'daily':','.join(weather_columns),
+                    'timezone':'Asia/Kuala_Lumpur'}
+            response=requests.get('https://archive-api.open-meteo.com/v1/archive',params=params,timeout=(10,45))
+            response.raise_for_status()
+            fresh=pd.DataFrame(response.json()['daily']).rename(columns={'time':'date'})
+            fresh['date']=pd.to_datetime(fresh.date,errors='raise').dt.normalize()
+            fresh['state']=state
+            fresh=fresh.loc[fresh.date.isin(missing),['date','state',*weather_columns]]
+            if fresh.date.duplicated().any() or len(missing.difference(fresh.date)):
+                raise ValueError(f'Incomplete archive dates for {state}; existing files retained.')
+            existing=pd.concat([existing,fresh],ignore_index=True)
         frames.append(existing)
-        print(f'Weather {state}: {len(existing)} dates ready (checkpoint saved)',flush=True)
+        print(f'Weather {state}: {len(missing)} dates downloaded',flush=True)
     weather=pd.concat(frames,ignore_index=True).sort_values(['state','date'])
     for field in weather_columns:
         weather[field]=pd.to_numeric(weather[field],errors='raise')
@@ -305,7 +258,8 @@ def refresh_external_data():
     try:
         # Official full Parquet avoids a truncated, unpaginated 10,000-row API response.
         from io import BytesIO
-        response=get_with_retry('https://storage.dosm.gov.my/cpi/cpi_2d_state.parquet')
+        response=requests.get('https://storage.dosm.gov.my/cpi/cpi_2d_state.parquet',timeout=(10,90))
+        response.raise_for_status()
         cpi=pd.read_parquet(BytesIO(response.content))
         required={'date','state','division','index'}
         if not required<=set(cpi.columns):raise ValueError(f'Missing CPI columns: {required-set(cpi.columns)}')
