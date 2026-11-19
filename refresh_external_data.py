@@ -16,13 +16,45 @@ WEATHER_FIELDS = ['rain_total_mm', 'temperature_mean_c', 'humidity_mean_pct',
                   'wet_streak_days', 'dry_streak_days']
 
 
+_PREFER_WEATHER_CURL=False
+
+def _curl_weather_get(url,params):
+    """Alternative HTTPS client, same archive endpoint/data; keep certificate verification."""
+    import requests
+    import subprocess
+    import shutil
+    from urllib.parse import urlencode
+    if url!='https://archive-api.open-meteo.com/v1/archive':
+        raise ValueError('curl fallback is restricted to the existing weather endpoint')
+    if not shutil.which('curl'):
+        raise requests.ConnectionError('curl is unavailable on this runner')
+    target=url+'?'+urlencode(params or {})
+    command=['curl','--ipv4','--http1.1','--proto','=https','--silent','--show-error',
+             '--fail','--connect-timeout','20','--max-time','90',target]
+    try:
+        result=subprocess.run(command,capture_output=True,timeout=100)
+    except (OSError,subprocess.TimeoutExpired) as exc:
+        raise requests.ConnectionError('Weather curl transport failed') from exc
+    if result.returncode:
+        if result.returncode==22:
+            raise RuntimeError('Weather curl received an HTTP error; no alternate source will be substituted.')
+        raise requests.ConnectionError(f'Weather curl transport exit code {result.returncode}')
+    response=requests.Response();response.status_code=200;response._content=result.stdout
+    response.url=target;response.encoding='utf-8'
+    return response
+
+
 def get_with_retry(url, *, params=None, attempts=4):
     """Retry transient GET failures only; TLS verification remains enabled."""
     import requests
     import time
+    global _PREFER_WEATHER_CURL
+    weather_url=url=='https://archive-api.open-meteo.com/v1/archive'
     for attempt in range(1,attempts+1):
+        used_curl=False
         try:
-            response=requests.get(url,params=params,timeout=(30,120))
+            used_curl=weather_url and _PREFER_WEATHER_CURL
+            response=(_curl_weather_get(url,params) if used_curl else requests.get(url,params=params,timeout=(30,120)))
             response.raise_for_status()
             return response
         except (requests.exceptions.Timeout,requests.exceptions.ConnectionError,
@@ -30,6 +62,14 @@ def get_with_retry(url, *, params=None, attempts=4):
             status=getattr(getattr(exc,'response',None),'status_code',None)
             if status is not None and status not in (408,425,429,500,502,503,504):
                 raise
+            if weather_url and status is None and not used_curl:
+                try:
+                    print('Python weather connection failed; trying HTTPS curl over IPv4.',flush=True)
+                    response=_curl_weather_get(url,params)
+                    _PREFER_WEATHER_CURL=True
+                    return response
+                except requests.exceptions.RequestException:
+                    print('Weather curl connection also unavailable; keeping bounded retries/checkpoint.',flush=True)
             if attempt==attempts:
                 raise RuntimeError(f'External source unavailable after {attempts} attempts ({type(exc).__name__}). Weather progress was kept; retry with a NEW workflow run.') from exc
             delay=min(30,2**attempt)
@@ -236,9 +276,15 @@ def refresh_external_data():
     weather_columns=['temperature_2m_mean','precipitation_sum','relative_humidity_2m_mean']
     cached_path=destination/'weather_state_daily.csv'
     checkpoint_path=destination/'.weather_checkpoint.csv'
+    seed_path=ROOT/'weather_seed.csv'
+    if seed_path.is_file():
+        import hashlib
+        checksum_path=ROOT/'weather_seed.sha256'
+        if not checksum_path.is_file() or hashlib.sha256(seed_path.read_bytes()).hexdigest()!=checksum_path.read_text().strip():
+            raise ValueError('Weather seed checksum missing or mismatched; existing data retained.')
     required={'state','date',*weather_columns}
     cache_parts=[]
-    for cache_file in (checkpoint_path,cached_path):
+    for cache_file in (seed_path,checkpoint_path,cached_path):
         if not cache_file.is_file():continue
         part=pd.read_csv(cache_file)
         if part.empty:continue
@@ -250,6 +296,10 @@ def refresh_external_data():
         for field in weather_columns:
             part[field]=pd.to_numeric(part[field],errors='raise')
             if np.isinf(part[field]).any():raise ValueError('Infinite weather cache values')
+        if cache_file==seed_path:
+            if part[['state','date',*weather_columns]].isna().any().any():raise ValueError('Weather seed has missing values')
+            if part.precipitation_sum.lt(0).any() or not part.relative_humidity_2m_mean.between(0,100).all():raise ValueError('Weather seed has invalid measurements')
+            print(f'Using verified local weather seed: {len(part)} rows, {part.state.nunique()} states, through {part.date.max().date()}',flush=True)
         cache_parts.append(part[['date','state',*weather_columns]])
     cached=(pd.concat(cache_parts,ignore_index=True).drop_duplicates(['state','date'],keep='last')
             if cache_parts else pd.DataFrame(columns=['date','state',*weather_columns]))
