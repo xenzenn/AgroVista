@@ -27,10 +27,22 @@ jobs:
           cache-dependency-path: requirements-refresh.txt
       - name: Install inference dependencies
         run: python -m pip install -r requirements-refresh.txt
+      - name: Restore completed weather requests
+        uses: actions/cache/restore@v4
+        with:
+          path: data/external/final_rebuild/.weather_checkpoint.csv
+          key: weather-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: weather-v1-
       - name: Refresh and publish update
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python run_cloud_refresh.py
+      - name: Save weather progress even if refresh failed
+        if: ${{ always() && hashFiles('data/external/final_rebuild/.weather_checkpoint.csv') != '' }}
+        uses: actions/cache/save@v4
+        with:
+          path: data/external/final_rebuild/.weather_checkpoint.csv
+          key: weather-v1-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Keep refresh audits
         if: always()
         uses: actions/upload-artifact@v4
