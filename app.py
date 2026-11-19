@@ -913,7 +913,21 @@ def find_db():
     for root in [here,*list(here.parents)[:3],Path.cwd()]:
         p=root/'data/database/agrovista.duckdb'
         if p.is_file():return p
-    raise FileNotFoundError('Put this file in AgroVista_V2/app or the project root. Expected data/database/agrovista.duckdb. You can also set AGROVISTA_DB_PATH.')
+    from cloud_database import ensure_database
+    target=here/'data/database/agrovista.duckdb'
+    notice=st.empty()
+    bar=st.progress(0.,text='Preparing dashboard database…')
+    def report(received,total):
+        downloaded=received/1024**2
+        if total:
+            bar.progress(min(received/total,1.),text=f'Downloading database: {downloaded:.0f} / {total/1024**2:.0f} MiB')
+        else:
+            bar.progress(0.,text=f'Downloading database: {downloaded:.0f} MiB')
+    notice.info('First server startup: downloading the published database. This may take several minutes.')
+    try:
+        return ensure_database(target,report)
+    finally:
+        bar.empty();notice.empty()
 
 RECIPE_MENUS={
     'Sup ABC': {
