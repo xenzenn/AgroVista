@@ -998,7 +998,28 @@ body:has([role="dialog"]) .st-key-mobile_nav{visibility:hidden!important}
 .menu-card-title{min-height:3.2em!important;font-size:.94rem!important}
 .menu-card-meta{min-height:1.5em!important}
 }
-</style>'''
+.st-key-mobile_cloud_chrome{height:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden}
+/* Mobile refinements: filters share one state, no hidden competing widgets. */
+@media(max-width:1000px){
+.st-key-landing_nav [data-testid="stHorizontalBlock"]{display:flex!important;flex-wrap:wrap!important;gap:16px!important}
+.st-key-landing_nav [data-testid="stColumn"]:first-child{text-align:left!important}
+.st-key-landing_nav .landing-logo{display:block;margin-left:0!important;margin-right:auto!important}
+.st-key-landing_nav [data-testid="stColumn"]:last-child button{margin-left:0!important}
+.st-key-landing_nav{padding-top:0!important}
+.st-key-mobile_nav{z-index:1000000!important}
+[data-testid="stDialog"]{z-index:1000001!important}
+[data-testid="stAppViewerBadge"],[data-testid="stAppOwnerBadge"],
+[data-testid="manage-app-button"],.viewerBadge_container__r5tak,
+.viewerBadge_link__qRIco,[class*="viewerBadge"],[class*="ViewerBadge"],
+[class*="profilePreview"],[class*="ProfilePreview"],
+a[href^="https://streamlit.io/cloud"]{display:none!important}
+[data-testid="stDialog"] [role="dialog"]{width:calc(100% - 24px)!important;box-sizing:border-box}
+.st-key-catalog_item_layout{min-width:0}
+.st-key-catalog_items_grid button,.st-key-catalog_menus_grid button{min-height:44px}
+.st-key-menu_detail [data-testid="stHorizontalBlock"]{gap:10px!important}
+.block-container{padding-bottom:calc(112px + env(safe-area-inset-bottom))!important}
+}
+</style>''' 
 
 def esc(v):return html.escape(str(v),quote=True)
 def money(v):return f'RM {float(v):,.2f}' if v is not None and pd.notna(v) and np.isfinite(float(v)) else '—'
@@ -1099,7 +1120,7 @@ def signature(db):
     db=Path(db)
     s=db.stat();wal=Path(str(db)+'.wal');return (s.st_mtime_ns,s.st_size,wal.stat().st_mtime_ns if wal.exists() else 0)
 
-@st.cache_data(ttl=300,max_entries=8,show_spinner=False)
+@st.cache_data(ttl=3600,max_entries=64,show_spinner=False)
 def sql(db,stamp,query,params=()):
     from cloud_runtime import query_dataframe
     return query_dataframe(db,query,params)
@@ -1373,9 +1394,19 @@ def restore_basket_widget(widget_key,saved_key,default,options=None):
 
 
 def remember_basket_quantity(code):
-    value=float(st.session_state[f'basket_qty_{code}'])
-    for entry in st.session_state.get('comparison_basket',[]):
-        if int(entry['item_code'])==int(code):entry['quantity']=value
+    # Removal and a pending quantity edit can arrive in the same rerun.
+    # Removed widgets have no state; a late callback must not restore the item.
+    entry=next((row for row in st.session_state.get('comparison_basket',[])
+                if int(row['item_code'])==int(code)),None)
+    value=st.session_state.get(f'basket_qty_{code}')
+    if entry is None or value is None:
+        return
+    try:
+        value=float(value)
+    except (TypeError,ValueError):
+        return
+    if np.isfinite(value) and .001<=value<=100000.:
+        entry['quantity']=value
 
 
 def remember_basket_district(state):
@@ -1392,6 +1423,7 @@ def open_price_comparison(code,state,premise=None):
     # Deliberately leave navigation, location filters and forecast date untouched.
 
 
+@st.cache_data(ttl=3600,max_entries=64,show_spinner=False)
 def asset_image(root,group,code):
     for base in (root,root/'app',Path(__file__).parent):
         for ext in ['.webp','.png','.jpg','.jpeg']:
@@ -2316,35 +2348,28 @@ def full_recipe_button(source, name, key):
                        help=f'Open the Ajinomoto Malaysia recipe for {name} in a new tab.')
 
 
-@st.dialog('Item catalog',width='large')
+def close_catalog():
+    st.session_state.pop('_active_catalog',None)
+
+
+@st.dialog('Item catalog',width='large',on_dismiss=close_catalog)
 def item_catalog(root,available,in_basket=None,selected_code=None):
     items=available.assign(category=available.item_category.replace('', 'Other'))
     categories=['All',*sorted(items.category.unique(),key=str.casefold)]
     if st.session_state.get('catalog_category_choice') not in categories:
         st.session_state['catalog_category_choice']='All'
-    with st.container(key='mobile_catalog_category'):
-        st.selectbox('Category',categories,key='catalog_category_choice')
+    category=st.selectbox('Category',categories,key='catalog_category_choice')
     with st.container(key='catalog_item_layout'):
-        sidebar,content=st.columns([1,5])
-        categories=['All',*sorted(items.category.unique(),key=str.casefold)]
-        with sidebar,st.container(key='catalog_category_nav'):
-            st.caption('Category')
-            category=st.session_state.get('catalog_category_choice','All')
-            if category not in categories:
-                category='All'
-            for option in categories:
-                if st.button(option,key=f'catalog_nav_{option}',use_container_width=True,
-                    type='primary' if option==category else 'secondary',
-                    on_click=st.session_state.__setitem__,args=('catalog_category_choice',option)):
-                    category=option
+        content=st.container()
         with content:
-            search=st.text_input('Search items',placeholder='Enter an item name').strip()
+            search=st.text_input('Search items',placeholder='Enter an item name',key='catalog_search').strip()
             items=items[items.item.str.contains(search,case=False,regex=False)]
             if category!='All':
                 items=items[items.category.eq(category)]
             if items.empty:
                 st.caption('No items match in this area.')
                 return
+            st.caption(f'{len(items)} matching items')
             with st.container(border=False,key='catalog_items_grid'):
                 for _,group in items.groupby('category',sort=True):
                     st.markdown(f'**{esc(group.category.iloc[0])}**')
@@ -2363,6 +2388,7 @@ def item_catalog(root,available,in_basket=None,selected_code=None):
                                     st.session_state.pending_prediction_item=int(item.item_code)
                                 else:
                                     add_comparison_item(item.item_code)
+                                close_catalog()
                                 st.rerun()
 
 def item_analysis(store,cat,prem,root,batch,today):
@@ -2401,6 +2427,8 @@ def item_analysis(store,cat,prem,root,batch,today):
             st.html('<div class="prediction-field-label">Food item</div>')
             if st.button('Browse item',icon=':material/shopping_basket:',width='stretch',type='primary',
                          key='browse_prediction_item',help='Browse item catalog'):
+                st.session_state['_active_catalog']='analysis_item'
+            if st.session_state.get('_active_catalog')=='analysis_item':
                 item_catalog(root,scoped,selected_code=code)
         period = filter_select(d,'History',[30,90,180,365,0],'history_period',default=90,
                                format_func=lambda n:f'{n} days' if n else 'All available')
@@ -2726,7 +2754,7 @@ def price_comparison(store,cat,prem,root,today):
     available=selectable[selectable.item_code.isin(area_codes)]
     in_basket={int(entry['item_code']) for entry in st.session_state.get('comparison_basket',[])}
 
-    @st.dialog('Menu catalog',width='large')
+    @st.dialog('Menu catalog',width='large',on_dismiss=close_catalog)
     def menu_catalog():
         fields=['menu_order','menu_name','ingredient_order','item_code','quantity','expected_unit']
         menus=pd.DataFrame(recipe_menu_rows(),columns=fields)
@@ -2825,6 +2853,7 @@ def price_comparison(store,cat,prem,root,today):
                         chosen.append((code,float(entry.quantity)))
         if st.button('Add selected ingredients',key='catalog_menu_add',type='primary',disabled=not chosen):
             add_menu_ingredients(chosen)
+            close_catalog()
             st.rerun()
         if not other_ingredients.empty:
             st.markdown('**Other recipe ingredients**')
@@ -2848,11 +2877,15 @@ def price_comparison(store,cat,prem,root,today):
     with item_col,st.container(key='basket_item_filter',gap=None):
         st.html('<div class="prediction-field-label">Food item</div>')
         if st.button('Browse item',icon=':material/shopping_basket:',width='stretch',type='primary',key='browse_basket_item'):
+            st.session_state['_active_catalog']='basket_item'
+        if st.session_state.get('_active_catalog')=='basket_item':
             item_catalog(root,available,in_basket)
     with menu_col,st.container(key='basket_menu_filter',gap=None):
         st.html('<div class="prediction-field-label">Menu</div>')
         if st.button('Browse menu',icon=':material/restaurant_menu:',width='stretch',type='primary',key='browse_basket_menu'):
             st.session_state.pop('catalog_menu_detail',None)
+            st.session_state['_active_catalog']='basket_menu'
+        if st.session_state.get('_active_catalog')=='basket_menu':
             menu_catalog()
     with st.container(border=True,key='basket_editor_panel'):
         item_count=f'{len(basket)} {"item" if len(basket)==1 else "items"}'
@@ -3089,9 +3122,37 @@ def cached_navigation_data(database,stamp):
     return metadata,batch,snapshot,catalogue,premises
 
 
+def mobile_cloud_chrome():
+    """Style same-origin Community Cloud badges outside the app iframe on phones."""
+    if hasattr(st,'iframe'):
+        component_html=st.iframe
+    else:
+        from streamlit.components.v1 import html as component_html
+    with st.container(key='mobile_cloud_chrome',gap=None):
+        component_html("""<script>
+        (() => {
+          const css = '@media(max-width:1000px){[class*="viewerBadge"],[class*="ViewerBadge"],a[href="https://streamlit.io/cloud"],a:has([data-testid="appCreatorAvatar"]),[data-testid="appCreatorAvatar"]{display:none!important}}';
+          let frame = window;
+          for(let depth=0; depth<4; depth++) {
+            try {
+              const doc=frame.document;
+              if(!doc.getElementById('agrovista-mobile-cloud-chrome')) {
+                const style=doc.createElement('style');
+                style.id='agrovista-mobile-cloud-chrome'; style.textContent=css;
+                doc.head.appendChild(style);
+              }
+              if(frame===frame.parent) break;
+              frame=frame.parent;
+            } catch (_) { break; } // Cross-origin hosts remain untouched.
+          }
+        })();
+        </script>""",height=1)
+
+
 def main():
     st.set_page_config(page_title='AgroVista',page_icon='🌿',layout='wide',initial_sidebar_state='expanded')
     st.markdown(CSS,unsafe_allow_html=True)
+    mobile_cloud_chrome()
     today=today_kl()
     with st.sidebar:
         logo=brand_image()
@@ -3101,6 +3162,9 @@ def main():
         if st.session_state.get('page') in ['Cost Planner','Price Comparison']:st.session_state.page='Basket Comparison'
         elif 'page' in st.session_state and st.session_state.page not in pages:st.session_state.page='Price Analysis & Forecast'
         page=st.session_state.get('page',pages[0])
+        if st.session_state.get('_rendered_page')!=page:
+            close_catalog()
+            st.session_state['_rendered_page']=page
         with st.container(key='dashboard_nav'):
             for option in pages:
                 st.button(option,key=f'dashboard_nav_{option}',use_container_width=True,icon=icons[option],
