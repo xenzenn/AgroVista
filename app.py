@@ -1508,10 +1508,19 @@ def overview(store,cat,root,batch):
             ) AS premise_type_count {scoped_reports}''',scoped_dates).iloc[0]
         item_counts=store.q(f'''SELECT item_code, COUNT(DISTINCT premise_code) reporters
             {scoped_reports} GROUP BY item_code''',scoped_dates)
-        types=store.q(f'''SELECT premise_type_name, COUNT(*) premises FROM (
-            SELECT premise_code, MODE(premise_type ORDER BY premise_type) AS premise_type_name
-            {scoped_reports} AND premise_code IS NOT NULL GROUP BY premise_code
-        ) GROUP BY premise_type_name ORDER BY premises DESC,premise_type_name''',scoped_dates)
+        types=store.q(f'''WITH type_counts AS (
+            SELECT premise_code, premise_type, COUNT(*) AS observations
+            {scoped_reports} AND premise_code IS NOT NULL AND premise_type IS NOT NULL
+            GROUP BY premise_code,premise_type
+        ), selected_type AS (
+            SELECT premise_code,premise_type AS premise_type_name
+            FROM type_counts
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY premise_code ORDER BY observations DESC,premise_type ASC
+            )=1
+        ) SELECT premise_type_name,COUNT(*) AS premises
+          FROM selected_type GROUP BY premise_type_name
+          ORDER BY premises DESC,premise_type_name''',scoped_dates)
         codes=cat.item_code.astype(int).tolist()
         recent_end = pd.Timestamp(store.q(f"""SELECT MAX(CAST(date AS DATE)) AS latest
             FROM clean_joined_prices WHERE state IS NOT NULL AND premise_code IS NOT NULL
@@ -2977,7 +2986,10 @@ def main():
         st.markdown('<div class="app-footer">AgroVista · PriceCatcher reported prices · Forecasts are estimates · '+today.strftime('%d %b %Y')+' (Malaysia)</div>',unsafe_allow_html=True)
     except (duckdb.Error,FileNotFoundError,RuntimeError,OSError) as error:
         st.error(str(error))
-        st.info('Check the DuckDB path and schema. Close other Python/Jupyter/Streamlit processes holding a database write connection, then reopen this dashboard. Existing data has not been changed.')
+        if isinstance(error,duckdb.OutOfMemoryException):
+            st.info('This query exceeded the dashboard memory budget. Existing data has not been changed. Please share the last [AgroVista query] log lines so the remaining query can be optimised.')
+        else:
+            st.info('Check the DuckDB path, schema and error above. Existing data has not been changed.')
 
 if __name__=='__main__':
     if sys.argv[1:]==['--seed-basket-menus']:
