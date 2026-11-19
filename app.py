@@ -1719,22 +1719,13 @@ def overview_historical_pulse(store, snap, area, state_clause, state_params, out
     if last_month <= first_month:
         st.info('At least two complete months of reported prices are needed.')
         return
-    changes = store.q(f'''WITH monthly AS (
-        SELECT date_trunc('month', date)::DATE AS month, state, item_code, premise_code, MEDIAN(price) AS price
-        FROM clean_joined_prices
-        WHERE date >= CAST(? AS DATE) AND date < CAST(? AS DATE)
-          AND state IS NOT NULL AND item_code IN (SELECT UNNEST(?::BIGINT[])) AND premise_code IS NOT NULL
-          AND price > 0 AND isfinite(price){state_clause}
-        GROUP BY 1,2,3,4
-    ), matched AS (
-        SELECT month, item_code, price,
-            LAG(month) OVER history AS previous_month, LAG(price) OVER history AS previous_price
-        FROM monthly WINDOW history AS (PARTITION BY state,item_code,premise_code ORDER BY month)
-    )
-    SELECT month, item_code, MEDIAN(100*(price/previous_price-1)) AS change_pct
-    FROM matched WHERE previous_month = month - INTERVAL 1 MONTH
-    GROUP BY month,item_code HAVING COUNT(*) >= 3''',
-        [str(first_month.start_time.date()), str((last_month+1).start_time.date()), outlook_codes, *state_params])
+    from pulse_history import monthly_pulse
+    progress=st.progress(0.,text='Summarising monthly price history…')
+    try:
+        changes=monthly_pulse(store,first_month,last_month,outlook_codes,state_clause,state_params,
+            lambda done,total:progress.progress(done/total,text=f'Summarising monthly price history: {done}/{total} months'))
+    finally:
+        progress.empty()
     if changes.empty:
         st.info('No items have prices from at least 3 matched premises in consecutive complete months.')
         return
