@@ -41,7 +41,8 @@ def preflight():
     from refresh_external_data import load_weather_seed
     print('AgroVista checked refresh v3; commit:',os.environ.get('GITHUB_SHA','local')[:12],flush=True)
     for name in ('refresh_pricecatcher.py','refresh_external_data.py','refresh_forecasts.py',
-                 'agrovista_horizon_models.py','update_bundle.py','cloud_updates.py','cloud_database.py'):
+                 'agrovista_horizon_models.py','update_bundle.py','cloud_updates.py','cloud_database.py',
+                 'overview_compute.py','overview_precompute.py','pulse_history.py'):
         path=ROOT/name
         if not path.is_file():raise FileNotFoundError(f'Missing deployment file: {name}')
         compile(path.read_text(encoding='utf-8-sig'),str(path),'exec')
@@ -102,6 +103,8 @@ def main():
     run_step('refresh_pricecatcher.py','--root',str(ROOT))
     run_step('refresh_external_data.py')
     run_step('refresh_forecasts.py') # Includes Market Watch refresh and validation.
+    from overview_precompute import build_precomputed
+    print('Building prepared Overview:',build_precomputed(database),flush=True)
     today=datetime.now(ZoneInfo('Asia/Kuala_Lumpur')).date().isoformat()
     with connect(database,True) as con:validate_forecasts(con,today)
     update_id=os.environ.get('GITHUB_RUN_ID','manual')+'-'+os.environ.get('GITHUB_RUN_ATTEMPT','1')

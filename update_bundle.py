@@ -16,7 +16,8 @@ from cloud_database import DATABASE_SHA256
 TABLES=('lookup_items','lookup_premises','clean_joined_prices','daily_state_prices',
         'agrovista_v2_forecast_current','agrovista_v2_forecast_batches',
         'diagnostic_weather_daily','diagnostic_holiday_events','diagnostic_food_cpi_monthly',
-        'diagnostic_calendar_yearly','diagnostic_weather_full_summary','diagnostic_cpi_monthly_context')
+        'diagnostic_calendar_yearly','diagnostic_weather_full_summary','diagnostic_cpi_monthly_context',
+        'agrovista_overview_precomputed_v1')
 REQUIRED={'lookup_items','lookup_premises','clean_joined_prices','agrovista_v2_forecast_current',
           'agrovista_v2_forecast_batches','diagnostic_weather_daily','diagnostic_holiday_events',
           'diagnostic_food_cpi_monthly','diagnostic_calendar_yearly',
@@ -177,6 +178,8 @@ def apply_bundle(database,archive,expected_sha256,lock=None,external_dir=None):
                     # A derived table absent in the source must not serve stale observations.
                     if 'daily_state_prices' in available and 'daily_state_prices' not in m['tables']:
                         con.execute('DROP TABLE daily_state_prices')
+                    if 'agrovista_overview_precomputed_v1' in available and 'agrovista_overview_precomputed_v1' not in m['tables']:
+                        con.execute('DROP TABLE agrovista_overview_precomputed_v1')
                     if 'clean_prices' in available:
                         con.execute('DELETE FROM clean_prices WHERE CAST(date AS DATE)>=?::DATE',[cutoff])
                         con.execute('INSERT INTO clean_prices BY NAME SELECT date,item_code,premise_code,price FROM stage_clean_joined_prices')

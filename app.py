@@ -1789,6 +1789,9 @@ def overview_mover_changes(prices):
 @st.cache_data(ttl=3600,max_entries=24,show_spinner=False)
 def cached_overview_summary(database,stamp,snap,scoped_reports,scoped_dates,codes,state,_store=None):
     store=_store
+    from overview_precompute import read_prepared
+    prepared=read_prepared(store,'summary',snap,state,codes)
+    if prepared is not None:return prepared
     state_clause=' AND state=?' if state is not None else ''
     state_params=[state] if state is not None else []
     totals=store.q(f'''SELECT COUNT(DISTINCT premise_code) premises, COUNT(DISTINCT state) states,
@@ -2039,6 +2042,9 @@ def overview(store,cat,root,batch):
 
 @st.cache_data(ttl=3600,max_entries=24,show_spinner=False)
 def cached_price_pulse(database,stamp,first_month,last_month,codes,state,_store=None):
+    from overview_precompute import read_prepared
+    prepared=read_prepared(_store,'pulse',_store.snapshot(),state,codes,first_month,last_month)
+    if prepared is not None:return prepared
     from pulse_history import monthly_pulse
     return monthly_pulse(_store,pd.Period(first_month,freq='M'),pd.Period(last_month,freq='M'),
                          list(codes),' AND state=?' if state is not None else '',

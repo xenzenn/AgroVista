@@ -1,0 +1,50 @@
+{
+  "dataset": "synthetic fixture; not the production 1.42GB database",
+  "rows": 640000,
+  "build": {
+    "areas": 3,
+    "snapshots": 6,
+    "payload_bytes": 2875505,
+    "build_seconds": 0.83,
+    "summary_timings": [
+      {
+        "area": "Malaysia",
+        "direct_compute_ms": 236.065,
+        "prepared_read_ms": 36.007
+      },
+      {
+        "area": "Johor",
+        "direct_compute_ms": 151.859,
+        "prepared_read_ms": 19.791
+      },
+      {
+        "area": "Perlis",
+        "direct_compute_ms": 146.951,
+        "prepared_read_ms": 20.001
+      }
+    ]
+  },
+  "summary_benchmark": [
+    {
+      "area": "Malaysia",
+      "direct_median_ms": 240.372,
+      "prepared_median_ms": 40.828,
+      "pulse_direct_median_ms": 37.823,
+      "pulse_prepared_median_ms": 3.267
+    },
+    {
+      "area": "Johor",
+      "direct_median_ms": 153.367,
+      "prepared_median_ms": 26.41,
+      "pulse_direct_median_ms": 28.378,
+      "pulse_prepared_median_ms": 3.296
+    },
+    {
+      "area": "Perlis",
+      "direct_median_ms": 144.209,
+      "prepared_median_ms": 25.366,
+      "pulse_direct_median_ms": 27.444,
+      "pulse_prepared_median_ms": 3.178
+    }
+  ]
+}
