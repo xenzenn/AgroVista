@@ -2056,16 +2056,22 @@ def overview_historical_pulse(store, snap, area, state_clause, state_params, out
     if not outlook_codes:
         st.info('No state-level forecast items available for this area.')
         return
-    first_date = pd.Timestamp(store.q(f'''SELECT MIN(CAST(date AS DATE)) first_date
-        FROM clean_joined_prices WHERE state IS NOT NULL AND price>0 AND isfinite(price){state_clause}''',
-        state_params).iloc[0].first_date)
-    if pd.isna(first_date):
-        st.info('No historical prices available.')
-        return
-    first_month = first_date.to_period('M')
-    if first_date != first_month.start_time:
-        first_month += 1
-    last_month = snap.to_period('M') - int(not snap.is_month_end)
+    from overview_precompute import read_prepared
+    bounds=read_prepared(store,'pulse_range',snap,state_params[0] if state_params else None,outlook_codes)
+    if bounds is not None:
+        first_month=pd.Period(bounds['first'],freq='M')
+        last_month=pd.Period(bounds['last'],freq='M')
+    else:
+        first_date = pd.Timestamp(store.q(f'''SELECT MIN(CAST(date AS DATE)) first_date
+            FROM clean_joined_prices WHERE state IS NOT NULL AND price>0 AND isfinite(price){state_clause}''',
+            state_params).iloc[0].first_date)
+        if pd.isna(first_date):
+            st.info('No historical prices available.')
+            return
+        first_month = first_date.to_period('M')
+        if first_date != first_month.start_time:
+            first_month += 1
+        last_month = snap.to_period('M') - int(not snap.is_month_end)
     if last_month <= first_month:
         st.info('At least two complete months of reported prices are needed.')
         return
@@ -3501,6 +3507,17 @@ def main():
         status.html(sidebar_data(None,None,today))
         try:
             db=find_db();root=project_root(db)
+            # Streamlit reruns app.py but imported helper modules may still be old.
+            # Refresh only stateless helpers; never reload the shared database lock.
+            import importlib,update_bundle,overview_precompute,cloud_refresh_ui
+            from cloud_runtime import QUERY_LOCK
+            with QUERY_LOCK:
+                for helper in (update_bundle,overview_precompute,cloud_refresh_ui):
+                    if getattr(helper,'OVERVIEW_REPAIR_VERSION',0)<2:
+                        importlib.invalidate_caches()
+                        importlib.reload(helper)
+                    if getattr(helper,'OVERVIEW_REPAIR_VERSION',0)<2:
+                        raise RuntimeError('Overview repair files are incomplete. Copy all supplied Python files and reboot the app.')
             from cloud_refresh_ui import sync_if_enabled,admin_panel
             sync_if_enabled(db)
             metadata,batch,snapshot,cat,prem=cached_navigation_data(str(db),signature(db))

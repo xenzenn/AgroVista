@@ -32,15 +32,26 @@ def decode_summary(value):
             pd.Timestamp(d['end']),decode_frame(d['movers']),int(d['days']),decode_frame(d['weekly']))
 
 def read_prepared(store,family,snapshot,state,codes,first=None,last=None):
-    if TABLE not in store.tables:return None
+    if TABLE not in store.tables:
+        print(f'[AgroVista Overview] missing prepared table: {family} / {state or "Malaysia"}',flush=True)
+        return None
     batch=store.batch()
     if batch is None:return None
     key=cache_key(family,snapshot,batch.batch_id,state,codes,first,last)
     try:
         found=store.q(f'SELECT payload FROM {TABLE} WHERE cache_key=?',[key])
-        if len(found)!=1:return None
+        if len(found)!=1:
+            print(f'[AgroVista Overview] no prepared match: {family} / {state or "Malaysia"}',flush=True)
+            return None
+        print(f'[AgroVista Overview] prepared hit: {family} / {state or "Malaysia"}',flush=True)
         value=found.iloc[0,0]
-        return decode_summary(value) if family=='summary' else decode_frame(value)
+        if family=='summary':return decode_summary(value)
+        if family=='pulse_range':
+            data=json.loads(value)
+            if data.get('version')!=VERSION or not {'first','last'}<=set(data):return None
+            pd.Period(data['first'],freq='M');pd.Period(data['last'],freq='M')
+            return data
+        return decode_frame(value)
     except (ValueError,TypeError,KeyError,duckdb.Error):
         # An optional acceleration table must never break the original dashboard.
         return None
@@ -79,6 +90,8 @@ def build_precomputed(database):
                 first_date=pd.Timestamp(first_date);first=first_date.to_period('M')
                 first+=int(first_date!=first.start_time)
                 last=snap.to_period('M')-int(not snap.is_month_end)
+                rows.append((cache_key('pulse_range',snap,batch.batch_id,state,outlook),
+                             'pulse_range',state or 'Malaysia',json.dumps({'version':VERSION,'first':str(first),'last':str(last)})))
                 if last>first:
                     pulse=monthly_pulse(store,first,last,outlook,clause,params)
                     rows.append((cache_key('pulse',snap,batch.batch_id,state,outlook,str(first),str(last)),
@@ -104,3 +117,5 @@ if __name__=='__main__':
     import argparse
     parser=argparse.ArgumentParser();parser.add_argument('--database',required=True)
     args=parser.parse_args();print(json.dumps(build_precomputed(args.database),indent=2))
+
+OVERVIEW_REPAIR_VERSION=2

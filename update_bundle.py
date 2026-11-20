@@ -196,3 +196,5 @@ def apply_bundle(database,archive,expected_sha256,lock=None,external_dir=None):
             destination=Path(external_dir);destination.mkdir(parents=True,exist_ok=True)
             for name in m.get('external',{}):shutil.copy2(temp/'external'/name,destination/name)
         return True
+
+OVERVIEW_REPAIR_VERSION=2
