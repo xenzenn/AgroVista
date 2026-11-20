@@ -1204,6 +1204,8 @@ a[href^="https://streamlit.io/cloud"]{display:none!important}
 .st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stColumn"]:nth-child(3){grid-column:2!important;grid-row:2!important}
 .st-key-basket_modern [class*="st-key-basket_row_"] [data-testid="stColumn"]:nth-child(4){grid-column:3!important;grid-row:2!important}
 }
+[data-testid="stElementContainer"]:has([data-av-scroll-page]),
+[data-testid="stElementContainer"]:has([data-av-scroll-view]){display:none!important;height:0!important;margin:0!important;padding:0!important}
 </style>'''    
 
 def esc(v):return html.escape(str(v),quote=True)
@@ -2572,12 +2574,22 @@ def full_recipe_button(source, name, key, compact=False):
                        help=f'Open the Ajinomoto Malaysia recipe for {name} in a new tab.')
 
 
+def scroll_view_marker(kind,view):
+    if kind=='page':
+        st.html(f'<span data-av-scroll-page="{esc(view)}"></span>')
+    else:
+        epoch=st.session_state.get('_av_catalog_epoch',0)
+        st.html(f'<span data-av-scroll-view="{epoch}:{esc(view)}"></span>')
+
+
 def close_catalog():
     st.session_state.pop('_active_catalog',None)
+    st.session_state['_av_catalog_epoch']=st.session_state.get('_av_catalog_epoch',0)+1
 
 
 @st.dialog('Item catalog',width='large',on_dismiss=close_catalog)
 def item_catalog(root,available,in_basket=None,selected_code=None):
+    scroll_view_marker('catalog','items:'+str(st.session_state.get('_active_catalog','items')))
     items=available.assign(category=available.item_category.replace('', 'Other'))
     categories=['All',*sorted(items.category.unique(),key=str.casefold)]
     if st.session_state.get('catalog_category_choice') not in categories:
@@ -3015,6 +3027,7 @@ def price_comparison(store,cat,prem,root,today):
             recipe_metadata=menus.drop_duplicates('menu_name').set_index('menu_name').to_dict('index')
         catalogue=cat.set_index('item_code')
         menu=st.session_state.get('catalog_menu_detail')
+        scroll_view_marker('catalog','menu:'+str(menu) if menu in menus.menu_name.values else 'menus')
         if menu not in menus.menu_name.values:
             query=st.text_input('Search menus',key='catalog_menu_search',placeholder='Enter a menu name').strip()
             names=[name for name in menus.menu_name.drop_duplicates().tolist() if query.casefold() in name.casefold()]
@@ -3447,11 +3460,63 @@ function installDropdownKeyboardGuard(host) {
   scan();
 }
 
+function installViewScrollReset(host) {
+  if (host.__agrovistaViewScrollV1) return;
+  const doc=host.document;
+  let lastPage=null,lastDialog=null,pending=false,generation=0;
+  function top(node) {
+    if (!node) return;
+    const old=node.style?.scrollBehavior;
+    if(node.style)node.style.scrollBehavior='auto';
+    if(typeof node.scrollTo==='function')node.scrollTo({top:0,left:node.scrollLeft||0,behavior:'instant'});
+    node.scrollTop=0;
+    if(node.style)node.style.scrollBehavior=old||'';
+  }
+  function pageTop() {
+    doc.querySelectorAll('[data-testid="stMain"], [data-testid="stAppViewContainer"]').forEach(top);
+    top(doc.scrollingElement);
+    host.scrollTo({top:0,left:host.scrollX||0,behavior:'instant'});
+  }
+  function dialogTop(marker) {
+    const dialog=marker.closest('[role="dialog"]');
+    if(!dialog)return;
+    top(dialog);top(dialog.parentElement);
+    dialog.querySelectorAll('[data-testid="stVerticalBlock"], [data-testid="stDialogContent"], [data-testid="stVerticalBlockBorderWrapper"]').forEach(node=>{
+      const overflow=host.getComputedStyle(node).overflowY;
+      if(overflow==='auto'||overflow==='scroll')top(node);
+    });
+  }
+  function reset(action) {
+    const id=++generation;
+    action();
+    // Repeat after React's layout commit, but never fight a new user gesture.
+    host.requestAnimationFrame(()=>host.requestAnimationFrame(()=>{if(id===generation)action();}));
+  }
+  function scan() {
+    const page=doc.querySelector('[data-av-scroll-page]');
+    if(page){const value=page.getAttribute('data-av-scroll-page');if(value!==lastPage){lastPage=value;reset(pageTop);}}
+    const marker=doc.querySelector('[data-av-scroll-view]');
+    if(!marker){lastDialog=null;return;}
+    const view=marker.getAttribute('data-av-scroll-view');
+    if(view!==lastDialog){lastDialog=view;reset(()=>dialogTop(marker));}
+  }
+  const observer=new host.MutationObserver(()=>{
+    if(pending)return;pending=true;
+    host.requestAnimationFrame(()=>{pending=false;scan();});
+  });
+  observer.observe(doc.documentElement,{subtree:true,childList:true,attributes:true,
+    attributeFilter:['data-av-scroll-page','data-av-scroll-view']});
+  ['pointerdown','touchstart','wheel','keydown'].forEach(type=>doc.addEventListener(type,()=>{generation++;},{capture:true,passive:true}));
+  host.__agrovistaViewScrollV1={observer,scan};
+  scan();
+}
+
           let frame = window;
           for(let depth=0; depth<4; depth++) {
             try {
               const doc=frame.document;
               installDropdownKeyboardGuard(frame);
+              installViewScrollReset(frame);
               if(!doc.getElementById('agrovista-mobile-cloud-chrome')) {
                 const style=doc.createElement('style');
                 style.id='agrovista-mobile-cloud-chrome'; style.textContent=css;
@@ -3487,6 +3552,7 @@ def main():
                           type='primary' if option==page else 'secondary',
                           on_click=st.session_state.__setitem__,args=('page',option))
         status=st.empty()
+    scroll_view_marker('page',page)
     with st.container(key='mobile_header'):
         st.html(f'<div class="mobile-brand"><img src="{logo}" alt="AgroVista"></div>' if logo else '<div class="mobile-brand">AgroVista</div>')
         mobile_status=st.empty()
