@@ -2,8 +2,9 @@ name: Refresh dashboard data
 on:
   workflow_dispatch:
   schedule:
-    # 09:17 Malaysia time (UTC+8); schedules may start later when runners are busy.
-    - cron: '17 1 * * *'
+    # 00:00 Malaysia time (UTC+8) daily = 16:00 UTC on the previous day.
+    # GitHub may queue scheduled runs; midnight is the requested start time.
+    - cron: '0 16 * * *'
 permissions:
   contents: write
 concurrency:

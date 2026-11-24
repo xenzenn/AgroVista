@@ -6,7 +6,7 @@ Dependencies: python -m pip install "streamlit==1.67.0" duckdb pandas numpy plot
 Optional item photos: assets/foods/<item_code>.webp|png|jpg|jpeg.
 Without a local item photo an offline product illustration is displayed.
 The state highlight map and its MIT licence are embedded; no map downloads.
-Buying guidance is disabled on stale/incomplete forecast windows. The minimum
+Buying guidance is disabled on stale/incomplete prediction windows. The minimum
 saving percentage is a user preference, not a confidence interval.
 Validated using synthetic DuckDB data and Streamlit AppTest, not the user's DB.
 """
@@ -537,7 +537,7 @@ hr{border-color:var(--av-line)}
 @media(max-width:370px){.av-price-grid{grid-template-columns:1fr}}
 
 
-/* Compact, visible dashboard controls and forecast strip */
+/* Compact, visible dashboard controls and prediction strip */
 .day-grid{gap:6px;margin:0}
 .day{min-height:0;padding:7px 6px;border-radius:8px}
 .day strong{font-variant-numeric:tabular-nums;font-size:1rem}
@@ -1475,25 +1475,25 @@ def complete_forecasts(d):
     return d[valid].sort_values('forecast_date')
 
 def recommendation(f,today):
-    if f.empty:return {'status':'Unavailable','detail':'No complete seven-day forecast for this selection.'}
+    if f.empty:return {'status':'Unavailable','detail':'No complete seven-day prediction for this selection.'}
     f=f.sort_values('forecast_date')
     if list(f.forecast_date)!=list(pd.date_range(today,periods=7)):
-        return {'status':'Unavailable','detail':'Refresh the saved forecast for today before using buying guidance.'}
+        return {'status':'Unavailable','detail':'Refresh the saved prediction for today before using buying guidance.'}
     # Use the same cent precision as the price cards.
     cents=[int(f'{float(price):.2f}'.replace('.','')) for price in f.predicted_price]
     current=cents[0]
     lowest=min(cents)
     if lowest==max(cents):
-        return {'status':'Stable','detail':'All seven forecast prices are the same to the nearest sen.'}
+        return {'status':'Stable','detail':'All seven prediction prices are the same to the nearest sen.'}
     best=f.forecast_date.iloc[cents.index(lowest)]
     if best==today:
-        return dict(status='Lowest forecast today',detail='Today shares the minimum if prices are tied.',best=best)
+        return dict(status='Lowest prediction today',detail='Today shares the minimum if prices are tied.',best=best)
     saving=current-lowest
-    return dict(status='Lower forecast ahead',detail='Lowest forecast on '+datefmt(best),low=lowest/100,
+    return dict(status='Lower prediction ahead',detail='Lowest prediction on '+datefmt(best),low=lowest/100,
                 best=best,saving=saving/100,pct=saving/current*100 if current else 0)
 
 def page_header(title,sub='',eyebrow='AgroVista'):
-    icons={'market overview':'dashboard','price analysis & forecast':'query_stats','basket comparison':'shopping_basket'}
+    icons={'market overview':'dashboard','price analysis & prediction':'query_stats','basket comparison':'shopping_basket'}
     icon=icons.get(title.casefold(),'analytics')
     st.markdown(f'<div class="overview-title"><div class="dashboard-title-icon" aria-hidden="true">'
                 f'<span class="material-symbols-rounded">{icon}</span></div>'
@@ -1690,7 +1690,7 @@ def state_map(state,key,height=145,coverage=None):
             hover = esc(name)
         else:
             fill = sample_colorscale(colorscale, [count / max(maximum, 1)])[0]
-            hover = f'{esc(name)}<br>{count:,} forecast items'
+            hover = f'{esc(name)}<br>{count:,} prediction items'
         geom = feature['geometry']
         polygons = geom['coordinates'] if geom['type']=='MultiPolygon' else [geom['coordinates']]
         for polygon in polygons:
@@ -1719,7 +1719,7 @@ def state_map(state,key,height=145,coverage=None):
             st.html(f'<div class="overview-map-legend">0<span class="overview-map-scale" '
                     f'style="background:linear-gradient(to right,{ramp})"></span>{maximum:,} items</div>')
         else:
-            st.info('No complete state-level forecasts available.')
+            st.info('No complete state-level predictions available.')
 
 
 def daily_cards(f,today,rec):
@@ -1734,16 +1734,16 @@ def daily_cards(f,today,rec):
     st.markdown('<div class="day-grid">'+''.join(cards)+'</div>',unsafe_allow_html=True)
 
 def forecast_notice(batch,today):
-    if batch is None:st.info('No saved forecast batch. Historical analysis is available; run Notebook 07 or refresh_forecasts.py for forecasts.');return False
+    if batch is None:st.info('No saved prediction batch. Historical analysis is available; run Notebook 07 or refresh_forecasts.py for predictions.');return False
     start=pd.Timestamp(batch.forecast_today).normalize()
     if start!=today:
-        st.warning(f'Saved batch is for {datefmt(start)}–{datefmt(start+pd.Timedelta(days=6))}. Historical analysis remains available. Refresh forecasts for today; buying guidance is disabled.')
+        st.warning(f'Saved batch is for {datefmt(start)}–{datefmt(start+pd.Timedelta(days=6))}. Historical analysis remains available. Refresh predictions for today; buying guidance is disabled.')
         return False
     return True
 
 
 def open_overview_forecast(code,state,level):
-    st.session_state.update(page='Price Analysis & Forecast',item_level=level,
+    st.session_state.update(page='Price Analysis & Prediction',item_level=level,
                             selected_state=state,selected_item=int(code))
 
 
@@ -1886,11 +1886,11 @@ def overview(store,cat,root,batch):
     with st.container(key='market_overview'):
         with st.container(key='overview_kpis'):
             for col,label,value in zip(st.columns(4,gap='small'),
-                    ['Items with forecasts','Reporting premises','Known premise types',
+                    ['Items with predictions','Reporting premises','Known premise types',
                      'States reporting' if state is None else 'Districts reporting'],
                     [cat.item_code.nunique(),totals['premises'],totals['premise_type_count'],
                      totals['states' if state is None else 'districts']]):
-                col.metric(label,f'{int(value):,}', help=('Latest saved forecast batch' if label=='Items with forecasts'
+                col.metric(label,f'{int(value):,}', help=('Latest saved prediction batch' if label=='Items with predictions'
                            else f'Last 90 days · {datefmt(start)} – {datefmt(snap)}'))
 
         with st.container(key='overview_top'):
@@ -1932,9 +1932,9 @@ def overview(store,cat,root,batch):
             else:
                 overview_premise_donut(types)
         with popular_col, st.container(key='overview_card_popular'):
-            overview_panel('Popular items','Most reported items with forecasts · 90 days')
+            overview_panel('Popular items','Most reported items with predictions · 90 days')
             if popular.empty:
-                st.info('No items have both recent reports and a complete forecast.')
+                st.info('No items have both recent reports and a complete prediction.')
             for start_row in range(0,len(popular),2):
                 for col,(_,row) in zip(st.columns(2,gap='small'),popular.iloc[start_row:start_row+2].iterrows()):
                     with col,st.container(key=f'overview_food_{row.item_code}'):
@@ -1942,7 +1942,7 @@ def overview(store,cat,root,batch):
                         name=esc(row['item'])
                         st.html(f'<div class="overview-tile" aria-hidden="true" title="{name}">'
                                 f'<img src="{src}" alt=""><strong>{name}</strong><span>›</span></div>')
-                        st.button(f'View forecast for {row["item"]}',key=f'overview_open_{row.item_code}',
+                        st.button(f'View prediction for {row["item"]}',key=f'overview_open_{row.item_code}',
                                   width='stretch',help=f'{row.state} · {int(row.reporters):,} reporting premises',
                                   on_click=open_overview_forecast,args=(row.item_code,row.state,row.level.title()))
 
@@ -1960,8 +1960,8 @@ def overview(store,cat,root,batch):
                 with st.expander('Outlook chart error details'):
                     st.code(str(error))
         with map_col, st.container(key='overview_card_map'):
-            overview_panel('Forecast items by state',
-                           f'{state} outlined · Distinct forecast items' if state else 'Malaysia · Distinct forecast items')
+            overview_panel('Prediction items by state',
+                           f'{state} outlined · Distinct prediction items' if state else 'Malaysia · Distinct prediction items')
             state_map(state,'overview_forecast_map',height=184,coverage=forecast_counts)
         with spread_col, st.container(key='overview_card_spread'):
             week_of_month = (recent_end.day-1)//7+1
@@ -2025,7 +2025,7 @@ def overview(store,cat,root,batch):
                 with left:
                     overview_coverage('Reporting premises · 90 days',districts.reindex(district_index,fill_value=0),GREEN)
                 with right:
-                    overview_coverage('Items with premise forecasts',forecast_items.reindex(district_index,fill_value=0),BLUE)
+                    overview_coverage('Items with premise predictions',forecast_items.reindex(district_index,fill_value=0),BLUE)
                 return
             overview_panel('Coverage','All states and federal territories · nationwide')
             coverage_states=sorted(set(locations) | {
@@ -2039,7 +2039,7 @@ def overview(store,cat,root,batch):
             with left:
                 overview_coverage('Reporting premises · 90 days',reporting,GREEN)
             with right:
-                overview_coverage('Items with state forecasts',forecast_counts,BLUE)
+                overview_coverage('Items with state predictions',forecast_counts,BLUE)
 
 
 @st.cache_data(ttl=3600,max_entries=24,show_spinner=False)
@@ -2054,9 +2054,9 @@ def cached_price_pulse(database,stamp,first_month,last_month,codes,state,_store=
 
 
 def overview_historical_pulse(store, snap, area, state_clause, state_params, outlook_codes):
-    overview_panel('Historical price pulse', f'{area} · Number of forecast items whose recorded prices rose, fell or stayed stable from one month to the next')
+    overview_panel('Historical price pulse', f'{area} · Number of prediction items whose recorded prices rose, fell or stayed stable from one month to the next')
     if not outlook_codes:
-        st.info('No state-level forecast items available for this area.')
+        st.info('No state-level prediction items available for this area.')
         return
     from overview_precompute import read_prepared
     bounds=read_prepared(store,'pulse_range',snap,state_params[0] if state_params else None,outlook_codes)
@@ -2105,13 +2105,13 @@ def overview_historical_pulse(store, snap, area, state_clause, state_params, out
 def overview_first_day(store, batch, area, state, codes):
     forecasts = store.forecasts(batch, 'state', state=state, codes=codes)
     if forecasts.empty:
-        overview_panel('First-day price outlook', f'{area} · Forecast vs latest recorded prices')
-        st.info('No complete state-level forecasts available.')
+        overview_panel('First-day price outlook', f'{area} · Prediction vs latest recorded prices')
+        st.info('No complete state-level predictions available.')
         return
     first_day = forecasts.forecast_today.max()
-    subtitle = ('Today’s forecast vs latest recorded prices'
+    subtitle = ('Today’s prediction vs latest recorded prices'
                 if first_day.date() == today_kl().date()
-                else f'{datefmt(first_day)} forecast vs latest recorded prices')
+                else f'{datefmt(first_day)} prediction vs latest recorded prices')
     overview_panel('First-day price outlook', subtitle)
     first = forecasts[forecasts.forecast_date.eq(first_day) & forecasts.forecast_today.eq(first_day)]
     history = store.q('''WITH latest AS (
@@ -2132,7 +2132,7 @@ def overview_first_day(store, batch, area, state, codes):
         [str(first_day.date()), sorted(first.state.unique().tolist()), codes])
     paired = first.merge(history, on=['state','item_code'])
     if paired.empty:
-        st.info('No recorded prices could be matched to the first forecast day.')
+        st.info('No recorded prices could be matched to the first prediction day.')
         return
     paired['change_pct'] = 100*(paired.predicted_price/paired.observed_price-1)
     item_changes = paired.groupby('item_code').change_pct.median()
@@ -2206,13 +2206,13 @@ def price_ranking(obs,level):
 
 def comparisons(store,prem,batch,selected,state,today,level,premise,rank_card,location,unit):
     state_mode=level=='State'
-    overview_panel(f'{level} forecast price ranking',
+    overview_panel(f'{level} prediction price ranking',
           ('Across states' if state_mode else f'Across premises in {state}')+' · '+datefmt(today))
     predictions=store.forecasts(batch,level.lower(),None if state_mode else state,[selected])
     if not predictions.empty:
         predictions=predictions.loc[predictions.forecast_date.eq(pd.Timestamp(today).normalize())]
     if predictions.empty:
-        st.info('No comparable saved forecasts on '+datefmt(today)+'.')
+        st.info('No comparable saved predictions on '+datefmt(today)+'.')
     predictions=predictions.rename(columns={'predicted_price':'price'})
     if not state_mode and not predictions.empty:
         names=prem[['premise_code','premise']].drop_duplicates('premise_code')
@@ -2224,7 +2224,7 @@ def comparisons(store,prem,batch,selected,state,today,level,premise,rank_card,lo
     selected_pos=int(np.flatnonzero(mask.to_numpy())[0]) if mask.any() else None
     with rank_card:
         rank = '—'
-        price = 'No saved forecast for this date'
+        price = 'No saved prediction for this date'
         denominator = ''
         if selected_pos is not None:
             selected_row = ranking.iloc[selected_pos]
@@ -2248,7 +2248,7 @@ def comparisons(store,prem,batch,selected,state,today,level,premise,rank_card,lo
     scroll_target=f'{level}:{state}:{premise}:{selected}:{selected_pos}'
     st.html(f'<ul class="prediction-rank-list" role="list" tabindex="0" '
             f'data-scroll-target="{esc(scroll_target)}" '
-            f'aria-label="{esc(level)} forecast price ranking, RM per {esc(unit)}">{"".join(rows)}</ul>')
+            f'aria-label="{esc(level)} prediction price ranking, RM per {esc(unit)}">{"".join(rows)}</ul>')
     if selected_pos is not None:
         scroll_to_rankings({'.st-key-prediction_ranking_panel .prediction-rank-list':scroll_target})
 
@@ -2648,19 +2648,19 @@ def item_analysis(store,cat,prem,root,batch,today):
     eligible = store.eligible()
     levels = [level for level in ['State','Premise'] if eligible.level.eq(level.lower()).any()]
     if not levels:
-        st.info('No forecast items are available.')
+        st.info('No prediction items are available.')
         return
 
     district, premise = None, None
     with st.container(border=True,key='prediction_filters'):
         a,b,c,d = st.columns([1,1.15,1.35,1],gap='small',vertical_alignment='bottom')
-        level = filter_select(a,'Forecast level',levels,'item_level')
+        level = filter_select(a,'Prediction level',levels,'item_level')
         eligible = eligible[eligible.level.eq(level.lower())]
         state = filter_select(b,'State',sorted(eligible.state.unique()),'selected_state')
         eligible = eligible[eligible.state.eq(state)]
         scoped = cat[cat.item_code.isin(eligible.item_code)]
         if scoped.empty:
-            st.info('No forecast items are available for this selection.')
+            st.info('No prediction items are available for this selection.')
             return
         pending = st.session_state.pop('pending_prediction_item',None)
         if pending in scoped.item_code.values:
@@ -2709,12 +2709,12 @@ def item_analysis(store,cat,prem,root,batch,today):
                 h=older[older.date.ge(last-pd.Timedelta(days=period-1))].copy()
                 historical_fallback=True
     if historical_fallback:
-        st.info(f'No observations in the latest {period} calendar days. Showing the {period}-day period ending at the last actual observation, {datefmt(h.date.max())}. Forecast dates are unchanged.')
+        st.info(f'No observations in the latest {period} calendar days. Showing the {period}-day period ending at the last actual observation, {datefmt(h.date.max())}. Prediction dates are unchanged.')
     if h.empty:
-        st.info('No actual price records were found for this exact item and location in the available history sources. The saved forecast is shown separately.')
+        st.info('No actual price records were found for this exact item and location in the available history sources. The saved prediction is shown separately.')
     live = forecast_notice(batch,today)
     rec = recommendation(f,today) if live else {
-        'status':'Unavailable','detail':'Refresh the saved forecast for today to enable buying guidance.'}
+        'status':'Unavailable','detail':'Refresh the saved prediction for today to enable buying guidance.'}
     prices = h.price
     movement = (prices.iloc[-1]/prices.iloc[0]-1)*100 if len(prices)>1 and prices.iloc[0]>0 else None
     src, image_caption = food_image(root, row)
@@ -2730,13 +2730,13 @@ def item_analysis(store,cat,prem,root,batch,today):
     if len(prices) and prices.iloc[-1] > 0 and len(today_forecast):
         price_movement = 100*(today_forecast.iloc[0]/prices.iloc[-1]-1)
     summaries = [
-        ('Today’s forecast', money(today_forecast.iloc[0]) if len(today_forecast) else '—',
-         datefmt(today) if len(today_forecast) else 'No forecast for today'),
-        ('Lowest forecast', money(lowest_price) if lowest_price is not None else '—',
-         datefmt(lowest_day) if lowest_day is not None else 'No saved forecast'),
+        ('Today’s prediction', money(today_forecast.iloc[0]) if len(today_forecast) else '—',
+         datefmt(today) if len(today_forecast) else 'No prediction for today'),
+        ('Lowest prediction', money(lowest_price) if lowest_price is not None else '—',
+         datefmt(lowest_day) if lowest_day is not None else 'No saved prediction'),
         ('Latest reported price', money(prices.iloc[-1]) if len(prices) else '—',
          datefmt(h.date.iloc[-1]) if len(h) else 'No observations'),
-        ('Forecast price change', f'{price_movement:+.1f}%' if price_movement is not None else '—',
+        ('Prediction price change', f'{price_movement:+.1f}%' if price_movement is not None else '—',
          'Today vs latest reported price'),
     ]
     card_styles = {0:' av-price-estimate',1:' av-price-lowest'}
@@ -2754,8 +2754,8 @@ def item_analysis(store,cat,prem,root,batch,today):
                     f'<p>{esc(location)} · {esc(unit)}</p></div>'
                     f'<div class="av-price-grid">{metrics}</div>')
             guidance = {
-                'Lower forecast ahead': 'Buy later · '+datefmt(rec.get('best')),
-                'Lowest forecast today': 'Buy now · '+datefmt(today),
+                'Lower prediction ahead': 'Buy later · '+datefmt(rec.get('best')),
+                'Lowest prediction today': 'Buy now · '+datefmt(today),
                 'Stable': 'Buy now · '+datefmt(today),
             }.get(rec['status'],'Unavailable')
             with st.container(key='prediction_buying_row'):
@@ -2766,7 +2766,7 @@ def item_analysis(store,cat,prem,root,batch,today):
                 with savings:
                     saving_label = money(saving) if saving is not None else '—'
                     st.html(f'<div class="prediction-buying-card prediction-savings"><div class="eyebrow">Potential savings</div>'
-                            f'<b>{esc(saving_label)}</b><div class="small-note">Today vs lowest forecast</div></div>')
+                            f'<b>{esc(saving_label)}</b><div class="small-note">Today vs lowest prediction</div></div>')
                 with action:
                     st.button('Add to basket comparison',type='primary',icon=':material/shopping_basket:',width='stretch',
                               key='add_from_item',on_click=open_price_comparison,args=(code,state,premise))
@@ -2774,17 +2774,17 @@ def item_analysis(store,cat,prem,root,batch,today):
     with st.container(key='prediction_charts_row'):
         trend,position = st.columns([2,1],gap='small')
         with trend,st.container(border=True,key='prediction_trend_panel'):
-            window = f'{datefmt(f.forecast_date.min())}–{datefmt(f.forecast_date.max())}' if not f.empty else 'No saved forecast'
-            overview_panel('Price history & 7-day forecast', f'RM per {unit} · Forecast {window}' if not f.empty else f'RM per {unit} · {window}')
+            window = f'{datefmt(f.forecast_date.min())}–{datefmt(f.forecast_date.max())}' if not f.empty else 'No saved prediction'
+            overview_panel('Price history & 7-day prediction', f'RM per {unit} · Prediction {window}' if not f.empty else f'RM per {unit} · {window}')
             daily_cards(f,today,rec if live else {'best':lowest_day})
             fig = history_figure(h,unit)
             if not h.empty:
                 fig.data[0].update(name='Recorded prices',line=dict(color='#668273',width=2))
             if not f.empty:
                 f = f.sort_values('forecast_date')
-                fig.add_scatter(x=f.forecast_date,y=f.predicted_price,name='Forecast',
+                fig.add_scatter(x=f.forecast_date,y=f.predicted_price,name='Prediction',
                     mode='lines+markers',line=dict(color=GREEN,dash='dash',width=2),
-                    marker=dict(size=6),hovertemplate='%{x|%d %b %Y}<br>Forecast RM %{y:.2f}<extra></extra>')
+                    marker=dict(size=6),hovertemplate='%{x|%d %b %Y}<br>Prediction RM %{y:.2f}<extra></extra>')
                 if not h.empty:
                     fig.add_vline(x=f.forecast_date.min(),line_color='#9bb4a6',line_dash='dot',line_width=1)
             if fig.data:
@@ -2811,18 +2811,18 @@ def item_analysis(store,cat,prem,root,batch,today):
 
 def analysis(store,cat,prem,root,batch,today):
     with st.container(key='prediction_header'):
-        page_header('Price Analysis & Forecast','Choose an item and location to explore historical prices, seven-day forecasts and buying timing.','Forecast')
+        page_header('Price Analysis & Prediction','Choose an item and location to explore historical prices, seven-day predictions and buying timing.','Prediction')
     with st.container(key='prediction_content'):
         item_analysis(store,cat,prem,root,batch,today)
 
 
 def forecast_baskets(forecasts,premises,quantities,target,states,districts):
-    """Rank identical complete baskets only; missing item forecasts never cost zero."""
+    """Rank identical complete baskets only; missing item predictions never cost zero."""
     cols=['state','premise_code','premise','district','address','reported_items','total','complete','rank']
     if forecasts.empty:return pd.DataFrame(columns=cols),pd.DataFrame()
     f=forecasts[forecasts.forecast_date.eq(pd.Timestamp(target)) & forecasts.state.isin(states) & forecasts.item_code.isin(quantities)].copy()
     f=f[np.isfinite(f.predicted_price)&f.predicted_price.gt(0)]
-    if f.duplicated(['state','premise_code','item_code']).any():raise RuntimeError('Duplicate forecast item/premise rows: basket totals have not been calculated.')
+    if f.duplicated(['state','premise_code','item_code']).any():raise RuntimeError('Duplicate prediction item/premise rows: basket totals have not been calculated.')
     if f.empty:return pd.DataFrame(columns=cols),f
     metadata=premises[['state','premise_code','premise','district','address']].drop_duplicates(['state','premise_code'])
     f=f.merge(metadata,on=['state','premise_code'],how='left')
@@ -2964,7 +2964,7 @@ def price_comparison(store,cat,prem,root,today):
     if not forecast_notice(batch,today):return
     eligible=store.eligible();eligible=eligible[eligible.level.eq('premise')]
     selectable=cat[cat.item_code.isin(eligible.item_code)]
-    if selectable.empty:st.info('No complete premise forecasts available for basket comparison.');return
+    if selectable.empty:st.info('No complete premise predictions available for basket comparison.');return
     states=sorted(eligible.state.unique().tolist())
     previous=st.session_state.get('_saved_basket_states',[])
     preferred=st.session_state.get('_basket_seed_state',previous[0] if previous else st.session_state.get('selected_state'))
@@ -3172,7 +3172,7 @@ def price_comparison(store,cat,prem,root,today):
                               help=f'Remove {item["item"]}')
     quantities={int(entry['item_code']):float(entry['quantity']) for entry in basket}
     codes=list(quantities)
-    with st.spinner('Comparing saved forecast basket costs…'):
+    with st.spinner('Comparing saved prediction basket costs…'):
         forecasts=store.forecasts(batch,'premise',state,codes)
         ranked,lines=forecast_baskets(forecasts,prem,quantities,target,chosen_states,districts)
     complete=ranked[ranked.complete].copy()
@@ -3184,9 +3184,9 @@ def price_comparison(store,cat,prem,root,today):
             missing=[item_map.loc[code,'item'] for code in codes if available_counts.get(code,0)==0]
             st.warning('No premise can price every item in this basket. Try All districts or adjust your basket.')
             if missing:
-                st.caption('Items without forecasts in this area: '+', '.join(missing)+'.')
+                st.caption('Items without predictions in this area: '+', '.join(missing)+'.')
             elif not incomplete.empty:
-                st.caption(f'{len(incomplete)} premises have forecasts for only part of the basket.')
+                st.caption(f'{len(incomplete)} premises have predictions for only part of the basket.')
             return
         best=complete.iloc[0]
         highest=complete.iloc[-1]
@@ -3257,7 +3257,7 @@ def price_comparison(store,cat,prem,root,today):
                 f'<div class="prediction-rank-number">#{int(selected["rank"]):,}<small> / {len(complete):,}</small></div>'
                 f'<div class="prediction-rank-price"><strong>{money(selected.total)}</strong><span>today</span>{gap}</div></div>')
         with st.container(border=True,key='basket_trend_panel'):
-            st.html('<h2 class="basket-forecast-title">7-day basket forecast</h2>')
+            st.html('<h2 class="basket-forecast-title">7-day basket prediction</h2>')
             daily_cards(pd.DataFrame({'forecast_date':dates,'predicted_price':selected_trend}),today,{'best':best_day})
             fig=go.Figure(go.Scatter(x=dates,y=cheapest_trend,mode='lines+markers',connectgaps=False,
                                      name='Cheapest premise',line=dict(color=GREEN,width=2),
@@ -3296,7 +3296,7 @@ def price_comparison(store,cat,prem,root,today):
 
 
 def sidebar_data(latest,batch,today):
-    entries=(('Latest data',latest),('Forecast batch',batch),('Today (MYT)',today))
+    entries=(('Latest data',latest),('Prediction batch',batch),('Today (MYT)',today))
     rows=''.join(f'<dt>{label}</dt><dd>{datefmt(day)}</dd>' for label,day in entries)
     return f'<dl class="sidebar-data">{rows}</dl>'
 
@@ -3304,8 +3304,8 @@ def sidebar_data(latest,batch,today):
 DASHBOARD_MODULES=(
     ('Market Overview','dashboard','Explore the market',
      'See which items moved in price and how markets compare across Malaysia.'),
-    ('Price Analysis & Forecast','query_stats','Check a price forecast',
-     'Explore historical prices and seven-day forecasts by state or shop.'),
+    ('Price Analysis & Prediction','query_stats','Check a price prediction',
+     'Explore historical prices and seven-day predictions by state or shop.'),
     ('Basket Comparison','shopping_basket','Compare basket prices',
      'Build a shopping basket and compare estimated totals across shops.'),
 )
@@ -3331,13 +3331,13 @@ def landing_page():
                 </div>''')
             copy.button('Open Dashboard',key='landing_start',icon=':material/arrow_forward:',
                         type='primary',on_click=st.session_state.__setitem__,args=('page','Market Overview'))
-            copy.html('<p class="landing-context">Historical prices · Forecasts · Basket comparisons</p>')
+            copy.html('<p class="landing-context">Historical prices · Predictions · Basket comparisons</p>')
             photo=asset_image(root,'landing','produce')
             if photo:
                 visual.html(f'''<div class="landing-photo">
                     <img src="{photo}" alt="Fresh vegetables, tomatoes, chillies and onions in a shopping basket">
                     <div class="landing-photo-note"><span><strong>Look ahead before you shop.</strong>
-                    Explore the next seven days of forecast prices.</span><b aria-hidden="true">7d</b></div>
+                    Explore the next seven days of prediction prices.</span><b aria-hidden="true">7d</b></div>
                 </div>''')
         st.html('''<div class="landing-section-title"><h2>From the market<br>to your next shop.</h2>
             <p>Start with the bigger picture, explore an item or build your basket.</p></div>''')
@@ -3346,8 +3346,8 @@ def landing_page():
             descriptions=(
                 ('Market Overview','dashboard','overview','Explore the market',
                  'Spot weekly price movements and explore market coverage across Malaysia.'),
-                ('Price Analysis & Forecast','query_stats','forecast','Explore forecasts',
-                 'Follow an item’s price history and see its forecast for the next seven days.'),
+                ('Price Analysis & Prediction','query_stats','forecast','Explore predictions',
+                 'Follow an item’s price history and see its prediction for the next seven days.'),
                 ('Basket Comparison','shopping_basket','basket','Compare your basket',
                  'Choose items or a recipe, then compare basket costs across shops.'),
             )
@@ -3360,7 +3360,7 @@ def landing_page():
                     st.html(f'<div class="landing-module"><h3>{esc(name)}</h3><p>{esc(description)}</p></div>')
                     st.button(action,key=f'landing_{icon}',icon=':material/arrow_forward:',width='stretch',
                               on_click=st.session_state.__setitem__,args=('page',name))
-        st.html('<div class="landing-footer"><strong>AgroVista</strong><p>Price data from PriceCatcher · Forecasts and basket totals are estimates.</p></div>')
+        st.html('<div class="landing-footer"><strong>AgroVista</strong><p>Price data from PriceCatcher · Predictions and basket totals are estimates.</p></div>')
 
 
 @st.cache_data(ttl=3600,max_entries=2,show_spinner=False)
@@ -3541,7 +3541,7 @@ def main():
         icons={'Home':':material/home:',**{name:f':material/{icon}:' for name,icon,_,_ in DASHBOARD_MODULES}}
         pages=list(icons)
         if st.session_state.get('page') in ['Cost Planner','Price Comparison']:st.session_state.page='Basket Comparison'
-        elif 'page' in st.session_state and st.session_state.page not in pages:st.session_state.page='Price Analysis & Forecast'
+        elif 'page' in st.session_state and st.session_state.page not in pages:st.session_state.page='Price Analysis & Prediction'
         page=st.session_state.get('page',pages[0])
         if st.session_state.get('_rendered_page')!=page:
             close_catalog()
@@ -3560,7 +3560,7 @@ def main():
     with st.container(key='mobile_nav'):
         for col,(option,label) in zip(st.columns(4,gap='small'),[
                 ('Home','Home'),('Market Overview','Overview'),
-                ('Price Analysis & Forecast','Prices'),('Basket Comparison','Basket')]):
+                ('Price Analysis & Prediction','Prices'),('Basket Comparison','Basket')]):
             col.button(label,key=f'mobile_nav_{option}',icon=icons[option],width='stretch',
                        type='primary' if option==page else 'secondary',
                        on_click=st.session_state.__setitem__,args=('page',option))
@@ -3589,15 +3589,15 @@ def main():
             metadata,batch,snapshot,cat,prem=cached_navigation_data(str(db),signature(db))
             store=Store.__new__(Store);store.__dict__.update(metadata)
             status.html(sidebar_data(store.snapshot(),batch.forecast_today if batch is not None else None,today))
-            mobile_status.html(f'<div class="mobile-dates">Latest data · {datefmt(snapshot)} &nbsp;|&nbsp; Forecast · {datefmt(batch.forecast_today if batch is not None else None)}</div>')
-            if cat.empty and page!='Market Overview':st.error('No eligible agro-food items with complete latest-batch forecasts. Publish a valid Notebook 07 forecast batch first.');return
-            if prem.empty and page!='Market Overview':st.warning('No eligible premise forecasts in this batch. State analysis remains available.')
+            mobile_status.html(f'<div class="mobile-dates">Latest data · {datefmt(snapshot)} &nbsp;|&nbsp; Prediction · {datefmt(batch.forecast_today if batch is not None else None)}</div>')
+            if cat.empty and page!='Market Overview':st.error('No eligible agro-food items with complete latest-batch predictions. Publish a valid Notebook 07 prediction batch first.');return
+            if prem.empty and page!='Market Overview':st.warning('No eligible premise predictions in this batch. State analysis remains available.')
             if page=='Market Overview':overview(store,cat,root,batch)
-            elif page=='Price Analysis & Forecast':analysis(store,cat,prem,root,batch,today)
+            elif page=='Price Analysis & Prediction':analysis(store,cat,prem,root,batch,today)
             elif page=='Basket Comparison':
                 with st.container(key='basket_modern'):price_comparison(store,cat,prem,root,today)
             admin_panel()
-            st.markdown('<div class="app-footer">AgroVista · PriceCatcher reported prices · Forecasts are estimates · '+today.strftime('%d %b %Y')+' (Malaysia)</div>',unsafe_allow_html=True)
+            st.markdown('<div class="app-footer">AgroVista · PriceCatcher reported prices · Predictions are estimates · '+today.strftime('%d %b %Y')+' (Malaysia)</div>',unsafe_allow_html=True)
         except (duckdb.Error,FileNotFoundError,RuntimeError,OSError) as error:
             st.error(str(error))
             if isinstance(error,duckdb.OutOfMemoryException):
